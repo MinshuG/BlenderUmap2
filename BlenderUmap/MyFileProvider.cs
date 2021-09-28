@@ -7,6 +7,7 @@ using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.UE4.Versions;
+using Newtonsoft.Json;
 
 namespace BlenderUmap {
     public class MyFileProvider : DefaultFileProvider {
@@ -14,7 +15,7 @@ namespace BlenderUmap {
         private Dictionary<string, UStruct> _structCache;
         private Dictionary<string, UEnum> _enumCache;
 
-        public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories) {
+        public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, new VersionContainer(game)) {
             var keysToSubmit = new Dictionary<FGuid, FAesKey>();
             foreach (var entry in encryptionKeys) {
                 if (!string.IsNullOrEmpty(entry.FileName)) {
@@ -61,7 +62,10 @@ namespace BlenderUmap {
     public class EncryptionKey {
         public FGuid Guid;
         public string FileName;
+        [JsonProperty("something")]
         public FAesKey Key;
+        [JsonProperty("Key")]
+        public string StringKey;
 
         public EncryptionKey() {
             Guid = new();

@@ -43,14 +43,14 @@ namespace BlenderUmap {
                     return;
                 }
 
-                Log.Information("Reading config file " + configFile.FullName);
+                Log.Information("Reading config file {0}", configFile.FullName);
 
                 using (var reader = configFile.OpenText()) {
                     config = new JsonSerializer().Deserialize<Config>(new JsonTextReader(reader));
                 }
 
                 var paksDir = config.PaksDirectory;
-                if (!File.Exists(paksDir)) {
+                if (!Directory.Exists(paksDir)) {
                     throw new MainException("Directory " + Path.GetFullPath(paksDir) + " not found.");
                 }
 
@@ -59,11 +59,13 @@ namespace BlenderUmap {
                 }
 
                 provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
+                provider.LoadVirtualPaths();
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
                     var usmap = new FileUsmapTypeMappingsProvider(newestUsmap.FullName);
                     usmap.Reload();
                     provider.MappingsContainer = usmap;
+                    Log.Information("Loaded mappings from {0}", newestUsmap.FullName);
                 }
 
                 var pkg = ExportAndProduceProcessed(config.ExportPackage);
@@ -83,34 +85,33 @@ namespace BlenderUmap {
                 } else {
                     Log.Error(e, "An unexpected error has occurred, please report");
                 }
-
                 Environment.Exit(1);
             }
         }
 
         public static FileInfo GetNewestUsmap(DirectoryInfo directory) {
-            var files = directory.GetFiles();
-            var lastModifiedTime = DateTime.MinValue;
             FileInfo chosenFile = null;
-
-            foreach (var file in files) {
-                if (file.Extension.Equals("usmap", StringComparison.OrdinalIgnoreCase) && file.LastWriteTime > lastModifiedTime) {
-                    chosenFile = file;
-                    lastModifiedTime = file.LastWriteTime;
+            var files = directory.GetFiles().OrderByDescending(f => f.LastWriteTime);
+            foreach (var f in files) {
+                if (f.Extension == ".usmap") {
+                    chosenFile = f;
+                    break;
                 }
             }
-
             return chosenFile;
         }
 
         private static IPackage ExportAndProduceProcessed(string path) {
+            if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
+
             if (!provider.TryLoadObject(path, out var obj)) {
                 Log.Warning("Object {0} not found", path);
                 return null;
             }
 
             if (obj is not UWorld world) {
-                Log.Information(obj.GetPathName() + " is not a World, won't try to export");
+                Log.Information( "{0} is not a World, won't try to export", obj.GetPathName());
                 return null;
             }
 
@@ -118,7 +119,7 @@ namespace BlenderUmap {
             var comps = new JArray();
 
             foreach (var actorLazy in persistentLevel.Actors) {
-                if (actorLazy == null) continue;
+                if (actorLazy == null || actorLazy.IsNull) continue;
                 var actor = actorLazy.Load();
                 if (actor.ExportType == "LODActor") continue;
 
@@ -129,8 +130,9 @@ namespace BlenderUmap {
                 // identifiers
                 var comp = new JArray();
                 comps.Add(comp);
-                var guid = actor.GetOrDefault<FGuid>("MyGuid"); // /Script/FortniteGame.BuildingActor:MyGuid
-                comp.Add(guid != null ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant() : Guid.NewGuid().ToString().Replace("-", ""));
+                comp.Add(actor.TryGetValue<FGuid>(out var guid, "MyGuid") // /Script/FortniteGame.BuildingActor:MyGuid
+                    ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant()
+                    : Guid.NewGuid().ToString().Replace("-", ""));
                 comp.Add(actor.Name);
 
                 // region mesh
@@ -149,7 +151,7 @@ namespace BlenderUmap {
                 }
                 // endregion
 
-                var matsObj = new JObject();
+                var matsObj = new JObject();  // matpath: [4x[str]]
                 var textureDataArr = new JArray();
                 var materials = new List<Mat>();
                 ExportMesh(mesh, materials);
@@ -237,10 +239,10 @@ namespace BlenderUmap {
             }*/
 
             var pkg = world.Owner;
-            string pkgName = provider.CompactFilePath(pkg.Name);
+            string pkgName = provider.CompactFilePath(pkg.Name).SubstringAfter("/");
             var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
             file.Directory.Create();
-            Log.Information("Writing to {}", file.FullName);
+            Log.Information("Writing to {0}", file.FullName);
 
             using var writer = file.CreateText();
             new JsonSerializer().Serialize(writer, comps);
@@ -270,9 +272,9 @@ namespace BlenderUmap {
                 var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
 
                 if (output.Exists) {
-                    Log.Debug("Texture already exists, skipping: {}", output.FullName);
+                    Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                 } else {
-                    Log.Information("Saving texture to {}", output.FullName);
+                    Log.Information("Saving texture to {0}", output.FullName);
 
                     /*if (fourCC != null) {
                         throw new NotImplementedException("DDS export is not implemented");
@@ -293,7 +295,12 @@ namespace BlenderUmap {
             if (meshExport == null) return;
 
             var exporter = new MeshExporter(meshExport, exportMaterials: false);
-            File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name), exporter.MeshLods.First().FileData);
+            if (exporter.MeshLods.Count == 0) {
+                Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                return;
+            }
+
+            File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData);
 
             if (config.bReadMaterials) {
                 var staticMaterials = meshExport.StaticMaterials;
@@ -334,9 +341,9 @@ namespace BlenderUmap {
             return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
         }
 
-        private static JArray Vector(FVector vector) => new(3) { vector.X, vector.Y, vector.Z };
-        private static JArray Rotator(FRotator rotator) => new(3) { rotator.Pitch, rotator.Yaw, rotator.Roll };
-        private static JArray Quat(FQuat quat) => new(4) { quat.X, quat.Y, quat.Z, quat.W };
+        private static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
+        private static JArray Rotator(FRotator rotator) => new() {rotator.Pitch, rotator.Yaw, rotator.Roll};
+        private static JArray Quat(FQuat quat) => new() {quat.X, quat.Y, quat.Z, quat.W};
 
         private static char[] GetDDSFourCC(UTexture2D texture) => (texture.Format switch {
             PF_DXT1 => "DXT1",
@@ -382,7 +389,8 @@ namespace BlenderUmap {
                     return;
                 }
 
-                var textureParameterValues = material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
+                var textureParameterValues =
+                    material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
                     foreach (var textureParameterValue in textureParameterValues) {
                         var name = textureParameterValue.ParameterInfo.Name;
@@ -401,18 +409,19 @@ namespace BlenderUmap {
             }
 
             public void AddToObj(JObject obj) {
-                if (Material == null) {
+                if (Material == null || Material.IsNull) {
                     obj.Add(GetHashCode().ToString("x"), null);
                     return;
                 }
-
+                
                 FPackageIndex[][] textures = { // d n s e a
                     new[] {
-                        _textureMap.GetValueOrDefault("Trunk_BaseColor", _textureMap.GetValueOrDefault("Diffuse", _textureMap.GetValueOrDefault("DiffuseTexture"))),
-                        _textureMap.GetValueOrDefault("Trunk_Normal", _textureMap.GetValueOrDefault("Normals")),
+                        _textureMap.GetValueOrDefault("Trunk_BaseColor",
+                            _textureMap.GetValueOrDefault("Diffuse", _textureMap.GetValueOrDefault("DiffuseTexture"))),
+                        _textureMap.GetValueOrDefault("Trunk_Normal", _textureMap.GetValueOrDefault("Normals", _textureMap.GetValueOrDefault("Normal"))),
                         _textureMap.GetValueOrDefault("Trunk_Specular", _textureMap.GetValueOrDefault("SpecularMasks")),
                         _textureMap.GetValueOrDefault("EmissiveTexture"),
-                        _textureMap.GetValueOrDefault("MaskTexture")
+                        _textureMap.GetValueOrDefault("MaskTexture", _textureMap.GetValueOrDefault("Comp_M_R_Ao"))
                     },
                     new[] {
                         _textureMap.GetValueOrDefault("Diffuse_Texture_3"),
@@ -437,7 +446,7 @@ namespace BlenderUmap {
                     }
                 };
 
-                var array = new JArray(textures.Length);
+                var array = new JArray();
                 foreach (var texture in textures) {
                     bool empty = true;
                     foreach (var index in texture) {
@@ -448,7 +457,7 @@ namespace BlenderUmap {
                         }
                     }
 
-                    var subArray = new JArray(texture.Length);
+                    var subArray = new JArray();
                     if (!empty) {
                         foreach (var index in texture) {
                             subArray.Add(PackageIndexToDirPath(index));
@@ -468,6 +477,7 @@ namespace BlenderUmap {
     [SuppressMessage("ReSharper", "FieldCanBeMadeReadOnly.Global")]
     public class Config {
         public string PaksDirectory = "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Content\\Paks";
+        [JsonProperty("UEVersion")]
         public EGame Game = EGame.GAME_UE4_LATEST;
         public List<EncryptionKey> EncryptionKeys = new();
         public bool bDumpAssets = false;
