@@ -4,35 +4,47 @@ using System.IO;
 using System.Linq;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
+using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Objects.Core.Misc;
-using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.UE4.Versions;
-using Newtonsoft.Json;
 
 namespace BlenderUmap {
     public class MyFileProvider : DefaultFileProvider {
         public static readonly DirectoryInfo JSONS_FOLDER = new("jsons");
-        private Dictionary<string, UStruct> _structCache;
-        private Dictionary<string, UEnum> _enumCache;
+        public readonly Cache _cache;
 
         public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, new VersionContainer(game)) {
+            _cache = new Cache(cacheSize);
+
             var keysToSubmit = new Dictionary<FGuid, FAesKey>();
             foreach (var entry in encryptionKeys) {
                 if (!string.IsNullOrEmpty(entry.FileName)) {
                     var foundGuid = UnloadedVfs.FirstOrDefault(it => it.Name == entry.FileName);
 
                     if (foundGuid != null) {
-                        keysToSubmit[foundGuid.EncryptionKeyGuid] = entry.Key;
+                        keysToSubmit[foundGuid.EncryptionKeyGuid] = new FAesKey(entry.Key);
                     } else {
                         Log.Warning("PAK file not found: {0}", entry.FileName);
                     }
                 } else {
-                    keysToSubmit[entry.Guid] = entry.Key;
+                    keysToSubmit[entry.Guid] = new FAesKey(entry.Key);
                 }
             }
 
             Initialize();
             SubmitKeys(keysToSubmit);
+        }
+
+        public override bool TryLoadPackage(string path, out IPackage package) {
+            if (_cache.TryGet(path, out package))
+                return true;
+            else {
+                if (base.TryLoadPackage(path, out package)) {
+                    _cache.Add(path, package);
+                    return true;
+                }
+            }
+            return false;
         }
 
         // WARNING: This does convert FortniteGame/Plugins/GameFeatures/GameFeatureName/Content/Package into /GameFeatureName/Package
@@ -59,20 +71,37 @@ namespace BlenderUmap {
         }
     }
 
+    public class Cache {
+        public readonly int Size = 100;
+        private Dictionary<string, IPackage> _cache;
+
+        public Cache(int size) {
+            Size = size;
+            _cache = new Dictionary<string, IPackage>();
+        }
+
+        public bool TryGet(string path, out IPackage package) {
+            return _cache.TryGetValue(path, out package);
+        }
+
+        public void Add(string path, IPackage package) {
+            if (_cache.Count == Size) {
+                _cache.Remove(_cache.Keys.First());
+            }
+            _cache.Add(path, package);
+        }
+    }
     public class EncryptionKey {
         public FGuid Guid;
         public string FileName;
-        [JsonProperty("something")]
-        public FAesKey Key;
-        [JsonProperty("Key")]
-        public string StringKey;
+        public string Key;
 
         public EncryptionKey() {
             Guid = new();
-            Key = new FAesKey(new byte[32]);
+            Key = String.Empty;
         }
 
-        public EncryptionKey(FGuid guid, FAesKey key) {
+        public EncryptionKey(FGuid guid, string key) {
             Guid = guid;
             Key = key;
         }

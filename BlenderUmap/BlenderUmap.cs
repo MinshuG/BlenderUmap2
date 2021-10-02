@@ -72,7 +72,7 @@ namespace BlenderUmap {
                 if (pkg == null) return;
 
                 var file = new FileInfo("processed.json");
-                Log.Information("Writing to " + file.FullName);
+                Log.Information("Writing to {0}", file.FullName);
                 using (var writer = file.CreateText()) {
                     var pkgName = provider.CompactFilePath(pkg.Name);
                     new JsonSerializer().Serialize(writer, pkgName);
@@ -111,21 +111,23 @@ namespace BlenderUmap {
             }
 
             if (obj is not UWorld world) {
-                Log.Information( "{0} is not a World, won't try to export", obj.GetPathName());
+                Log.Information("{0} is not a World, won't try to export", obj.GetPathName());
                 return null;
             }
 
             var persistentLevel = world.PersistentLevel.Load<ULevel>();
             var comps = new JArray();
 
-            foreach (var actorLazy in persistentLevel.Actors) {
+            for (var index = 0; index < persistentLevel.Actors.Length; index++) {
+                var actorLazy = persistentLevel.Actors[index];
                 if (actorLazy == null || actorLazy.IsNull) continue;
                 var actor = actorLazy.Load();
                 if (actor.ExportType == "LODActor") continue;
+                Log.Information("Loading: {0}/{1} {2}",index,persistentLevel.Actors.Length, actorLazy);
 
-                var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+                var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+                if (staticMeshCompLazy.IsNull) continue;
                 var staticMeshComp = staticMeshCompLazy?.Load();
-                if (staticMeshComp == null) continue;
 
                 // identifiers
                 var comp = new JArray();
@@ -151,7 +153,7 @@ namespace BlenderUmap {
                 }
                 // endregion
 
-                var matsObj = new JObject();  // matpath: [4x[str]]
+                var matsObj = new JObject(); // matpath: [4x[str]]
                 var textureDataArr = new JArray();
                 var materials = new List<Mat>();
                 ExportMesh(mesh, materials);
@@ -413,7 +415,7 @@ namespace BlenderUmap {
                     obj.Add(GetHashCode().ToString("x"), null);
                     return;
                 }
-                
+
                 FPackageIndex[][] textures = { // d n s e a
                     new[] {
                         _textureMap.GetValueOrDefault("Trunk_BaseColor",
