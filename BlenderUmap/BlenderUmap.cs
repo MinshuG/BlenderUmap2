@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
@@ -71,6 +74,7 @@ namespace BlenderUmap {
                 var pkg = ExportAndProduceProcessed(config.ExportPackage);
                 if (pkg == null) return;
 
+                while (ThreadPool.PendingWorkItemCount == 0) { }
                 var file = new FileInfo("processed.json");
                 Log.Information("Writing to {0}", file.FullName);
                 using (var writer = file.CreateText()) {
@@ -123,7 +127,7 @@ namespace BlenderUmap {
                 if (actorLazy == null || actorLazy.IsNull) continue;
                 var actor = actorLazy.Load();
                 if (actor.ExportType == "LODActor") continue;
-                Log.Information("Loading: {0}/{1} {2}",index,persistentLevel.Actors.Length, actorLazy);
+                Log.Information("Loading {0}: {1}/{2} {3}",world.Name, index,persistentLevel.Actors.Length, actorLazy);
 
                 var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
                 if (staticMeshCompLazy.IsNull) continue;
@@ -276,16 +280,20 @@ namespace BlenderUmap {
                 if (output.Exists) {
                     Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                 } else {
-                    Log.Information("Saving texture to {0}", output.FullName);
-
-                    /*if (fourCC != null) {
+                    if (fourCC != null) {
                         throw new NotImplementedException("DDS export is not implemented");
-                    }*/
+                    }
 
-                    using var image = texture.Decode(firstMip);
-                    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                    using var stream = output.OpenWrite();
-                    data.SaveTo(stream);
+                    ThreadPool.QueueUserWorkItem((x) => {
+                        Log.Information("Saving texture to {0}", output.FullName);
+                        using var image = texture.Decode(firstMip);
+                        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+                        try {
+                            using var stream = output.OpenWrite();
+                            data.SaveTo(stream);
+                        }
+                        catch (IOException  _) { } // two threads trying to write same texture
+                    });
                 }
             } catch (Exception e) {
                 Log.Warning(e, "Failed to save texture");
@@ -295,14 +303,17 @@ namespace BlenderUmap {
         private static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
-
-            var exporter = new MeshExporter(meshExport, exportMaterials: false);
-            if (exporter.MeshLods.Count == 0) {
-                Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                return;
-            }
-
-            File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData);
+            ThreadPool.QueueUserWorkItem((_) => {
+                try {
+                    var exporter = new MeshExporter(meshExport, exportMaterials: false);
+                    if (exporter.MeshLods.Count == 0) {
+                        Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                        return;
+                    }
+                    File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData); 
+                }
+                catch (IOException  e) { } // two threads trying to write same mesh
+            });
 
             if (config.bReadMaterials) {
                 var staticMaterials = meshExport.StaticMaterials;
@@ -314,8 +325,10 @@ namespace BlenderUmap {
             }
         }
 
-        public static DirectoryInfo GetExportDir(UObject exportObj) {
-            string pkgPath = provider.CompactFilePath(exportObj.Owner.Name);
+        public static DirectoryInfo GetExportDir(UObject exportObj) => GetExportDir(exportObj.Owner);
+
+        public static DirectoryInfo GetExportDir(IPackage package) {
+            string pkgPath = provider.CompactFilePath(package.Name);
             pkgPath = pkgPath.SubstringBeforeLast('.');
 
             if (pkgPath.StartsWith("/")) {
@@ -325,9 +338,10 @@ namespace BlenderUmap {
             var outputDir = new FileInfo(pkgPath).Directory;
             string pkgName = pkgPath.SubstringAfterLast('/');
 
-            if (exportObj.Name != pkgName) {
-                outputDir = new DirectoryInfo(Path.Combine(outputDir.ToString(), pkgName));
-            }
+            // what's this for?
+            // if (exportObj.Name != pkgName) {
+            //     outputDir = new DirectoryInfo(Path.Combine(outputDir.ToString(), pkgName));
+            // }
 
             outputDir.Create();
             return outputDir;
@@ -373,6 +387,14 @@ namespace BlenderUmap {
 
             return array;
         }
+        
+        private static T GetAnyValueOrDefault<T>(this Dictionary<string, T> dict, string[] keys) {
+            foreach (var key in keys) {
+                if (dict.ContainsKey(key))
+                    return dict.GetValueOrDefault(key);
+            }
+            return default;
+        }
 
         private class Mat {
             public FPackageIndex Material;
@@ -416,35 +438,35 @@ namespace BlenderUmap {
                     return;
                 }
 
+                // TODO: maybe allow loading keys from config
                 FPackageIndex[][] textures = { // d n s e a
                     new[] {
-                        _textureMap.GetValueOrDefault("Trunk_BaseColor",
-                            _textureMap.GetValueOrDefault("Diffuse", _textureMap.GetValueOrDefault("DiffuseTexture"))),
-                        _textureMap.GetValueOrDefault("Trunk_Normal", _textureMap.GetValueOrDefault("Normals", _textureMap.GetValueOrDefault("Normal"))),
-                        _textureMap.GetValueOrDefault("Trunk_Specular", _textureMap.GetValueOrDefault("SpecularMasks")),
-                        _textureMap.GetValueOrDefault("EmissiveTexture"),
-                        _textureMap.GetValueOrDefault("MaskTexture", _textureMap.GetValueOrDefault("Comp_M_R_Ao"))
+                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_Specular", "SpecularMasks" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture", "Tex_Comp" })
                     },
                     new[] {
-                        _textureMap.GetValueOrDefault("Diffuse_Texture_3"),
-                        _textureMap.GetValueOrDefault("Normals_Texture_3"),
-                        _textureMap.GetValueOrDefault("SpecularMasks_3"),
-                        _textureMap.GetValueOrDefault("EmissiveTexture_3"),
-                        _textureMap.GetValueOrDefault("MaskTexture_3")
+                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_3" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_3" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_3" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_3" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_3" })
                     },
                     new[] {
-                        _textureMap.GetValueOrDefault("Diffuse_Texture_4"),
-                        _textureMap.GetValueOrDefault("Normals_Texture_4"),
-                        _textureMap.GetValueOrDefault("SpecularMasks_4"),
-                        _textureMap.GetValueOrDefault("EmissiveTexture_4"),
-                        _textureMap.GetValueOrDefault("MaskTexture_4")
+                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_4" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_4" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_4" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_4" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_4" })
                     },
                     new[] {
-                        _textureMap.GetValueOrDefault("Diffuse_Texture_2"),
-                        _textureMap.GetValueOrDefault("Normals_Texture_2"),
-                        _textureMap.GetValueOrDefault("SpecularMasks_2"),
-                        _textureMap.GetValueOrDefault("EmissiveTexture_2"),
-                        _textureMap.GetValueOrDefault("MaskTexture_2")
+                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_2" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_2" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_2" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_2" }),
+                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_2" })
                     }
                 };
 

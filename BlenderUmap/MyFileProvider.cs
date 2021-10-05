@@ -7,14 +7,18 @@ using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Versions;
+using CUE4Parse.Utils;
+using Newtonsoft.Json;
 
 namespace BlenderUmap {
     public class MyFileProvider : DefaultFileProvider {
         public static readonly DirectoryInfo JSONS_FOLDER = new("jsons");
-        public readonly Cache _cache;
+        private readonly Cache _cache;
+        private readonly bool _bDumpAssets; 
 
         public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, new VersionContainer(game)) {
             _cache = new Cache(cacheSize);
+            _bDumpAssets = bDumpAssets;
 
             var keysToSubmit = new Dictionary<FGuid, FAesKey>();
             foreach (var entry in encryptionKeys) {
@@ -40,11 +44,22 @@ namespace BlenderUmap {
                 return true;
             else {
                 if (base.TryLoadPackage(path, out package)) {
-                    _cache.Add(path, package);
+                    if (_cache.Size != 0)
+                        _cache.Add(path, package);
+                    if (_bDumpAssets)
+                        DumpJson(package);
                     return true;
                 }
             }
             return false;
+        }
+
+        public void DumpJson(IPackage package) {
+            var output = new FileInfo(Path.Combine(Program.GetExportDir(package).ToString(), package.Name.SubstringAfterLast("/") + ".json"));
+            if (output.Exists) 
+                return;
+            using var writer = new StreamWriter(output.FullName);
+            writer.Write(JsonConvert.SerializeObject(package.GetExports(), Formatting.Indented));
         }
 
         // WARNING: This does convert FortniteGame/Plugins/GameFeatures/GameFeatureName/Content/Package into /GameFeatureName/Package
@@ -73,11 +88,11 @@ namespace BlenderUmap {
 
     public class Cache {
         public readonly int Size = 100;
-        private Dictionary<string, IPackage> _cache;
+        private readonly Dictionary<string, IPackage> _cache;
 
         public Cache(int size) {
             Size = size;
-            _cache = new Dictionary<string, IPackage>();
+            _cache = new Dictionary<string, IPackage>(StringComparer.OrdinalIgnoreCase);
         }
 
         public bool TryGet(string path, out IPackage package) {
@@ -85,6 +100,8 @@ namespace BlenderUmap {
         }
 
         public void Add(string path, IPackage package) {
+            if (_cache.ContainsKey(path))
+                return;
             if (_cache.Count == Size) {
                 _cache.Remove(_cache.Keys.First());
             }
