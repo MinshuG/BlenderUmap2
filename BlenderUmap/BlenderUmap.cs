@@ -292,7 +292,7 @@ namespace BlenderUmap {
                             using var stream = output.OpenWrite();
                             data.SaveTo(stream);
                         }
-                        catch (IOException  _) { } // two threads trying to write same texture
+                        catch (IOException) { } // two threads trying to write same texture
                     });
                 }
             } catch (Exception e) {
@@ -312,7 +312,7 @@ namespace BlenderUmap {
                     }
                     File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData); 
                 }
-                catch (IOException  e) { } // two threads trying to write same mesh
+                catch (IOException) { } // two threads trying to write same mesh
             });
 
             if (config.bReadMaterials) {
@@ -438,35 +438,34 @@ namespace BlenderUmap {
                     return;
                 }
 
-                // TODO: maybe allow loading keys from config
                 FPackageIndex[][] textures = { // d n s e a
                     new[] {
-                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "Trunk_Specular", "SpecularMasks" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture", "Tex_Comp" })
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Diffuse),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Normal),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Specular),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Emission),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.MaskTexture)
                     },
                     new[] {
-                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_3" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_3" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_3" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_3" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_3" })
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Diffuse),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Normal),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Specular),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Emission),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.MaskTexture)
                     },
                     new[] {
-                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_4" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_4" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_4" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_4" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_4" })
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Diffuse),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Normal),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Specular),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Emission),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.MaskTexture)
                     },
                     new[] {
-                        _textureMap.GetAnyValueOrDefault(new[] { "Diffuse_Texture_2" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "Normals_Texture_2" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "SpecularMasks_2" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "EmissiveTexture_2" }),
-                        _textureMap.GetAnyValueOrDefault(new[] { "MaskTexture_2" })
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Diffuse),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Normal),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Specular),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Emission),
+                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.MaskTexture)
                     }
                 };
 
@@ -510,6 +509,46 @@ namespace BlenderUmap {
         public bool bExportToDDSWhenPossible = true;
         public bool bExportBuildingFoundations = true;
         public string ExportPackage;
+        public TextureMapping Textures;
+    }
+
+    public class TextureMapping {
+        public TextureMap UV1 = new() {
+            Diffuse = new[] {"Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color" },
+            Normal = new[] {"Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"},
+            Specular = new[] {"Trunk_Specular", "SpecularMasks"},
+            Emission = new[] {"EmissiveTexture"},
+            MaskTexture = new[] { "MaskTexture" }
+        };
+        public TextureMap UV2 = new() {
+            Diffuse = new[] {"Diffuse_Texture_3"},
+            Normal = new[] {"Normals_Texture_3"},
+            Specular = new[] {"SpecularMasks_3"},
+            Emission = new[] {"EmissiveTexture_3"},
+            MaskTexture = new[] { "MaskTexture_3" }
+        };
+        public TextureMap UV3 = new() {
+            Diffuse = new[] {"Diffuse_Texture_4"},
+            Normal = new[] {"Normals_Texture_4"},
+            Specular = new[] {"SpecularMasks_4"},
+            Emission = new[] {"EmissiveTexture_4"},
+            MaskTexture = new[] { "MaskTexture_4" }
+            };
+        public TextureMap UV4 = new() {
+            Diffuse = new[] {"Diffuse_Texture_2"},
+            Normal = new[] {"Normals_Texture_2"},
+            Specular = new[] {"SpecularMasks_2"},
+            Emission = new[] {"EmissiveTexture_2"},
+            MaskTexture = new[] { "MaskTexture_2" }
+            };
+    }
+
+    public class TextureMap {
+        public string[] Diffuse;
+        public string[] Normal;
+        public string[] Specular;
+        public string[] Emission;
+        public string[] MaskTexture;
     }
 
     public class MainException : Exception {

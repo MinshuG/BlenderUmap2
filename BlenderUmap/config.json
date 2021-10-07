@@ -1,0 +1,51 @@
+﻿{
+  "_Documentation": "https://github.com/Amrsatrio/BlenderUmap2/blob/master/README.md",
+  "PaksDirectory": "C:\\Games\\Game\\Content\\Paks",
+  "UEVersion": "GAME_UE4_27",
+  "bDumpAssets": true,
+  "ObjectCacheSize": 100,
+  "bReadMaterials": true,
+  "bExportBuildingFoundations": true,
+  "ExportPackage": "Game/Maps/CoolMap.umap",
+  "Textures": {
+    "UV1": {
+      "Diffuse": ["CustomDiffuse", "Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"],
+      "Normal": ["Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"],
+      "Specular": ["Trunk_Specular", "SpecularMasks"],
+      "Emission": ["EmissiveTexture"],
+      "MaskTexture": ["MaskTexture"]
+    },
+    "UV2": {
+      "Diffuse": ["Diffuse_Texture_3"],
+      "Normal": ["Normals_Texture_3"],
+      "Specular": ["Specular_Texture_3"],
+      "Emission": ["Emissive_Texture_3"],
+      "MaskTexture": ["Mask_Texture_3"]
+    },
+    "UV3": {
+      "Diffuse": ["Diffuse_Texture_4"],
+      "Normal": ["Normals_Texture_4"],
+      "Specular": ["Specular_Texture_4"],
+      "Emission": ["Emissive_Texture_4"],
+      "MaskTexture": ["Mask_Texture_4"]
+    },
+    "UV4": {
+      "Diffuse": ["Diffuse_Texture_2"],
+      "Normal": ["Normals_Texture_2"],
+      "Specular": ["Specular_Texture_2"],
+      "Emission": ["Emissive_Texture_2"],
+      "MaskTexture": ["Mask_Texture_2"]
+    }
+  },
+  "EncryptionKeys": [
+    {
+      "Guid": "00000000000000000000000000000000",
+      "Key": "0x..."
+    },
+    {
+      "Guid": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "FileName": "pakchunk1001-WindowsClient.ucas",
+      "Key": "0x..."
+    }
+  ]
+}
