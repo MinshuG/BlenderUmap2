@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -88,11 +89,11 @@ namespace BlenderUmap {
 
     public class Cache {
         public readonly int Size = 100;
-        private readonly Dictionary<string, IPackage> _cache;
+        private readonly ConcurrentDictionary<string, IPackage> _cache;
 
         public Cache(int size) {
             Size = size;
-            _cache = new Dictionary<string, IPackage>(StringComparer.OrdinalIgnoreCase);
+            _cache = new ConcurrentDictionary<string, IPackage>(StringComparer.OrdinalIgnoreCase);
         }
 
         public bool TryGet(string path, out IPackage package) {
@@ -103,9 +104,9 @@ namespace BlenderUmap {
             if (_cache.ContainsKey(path))
                 return;
             if (_cache.Count == Size) {
-                _cache.Remove(_cache.Keys.First());
+                _cache.Remove(_cache.Keys.First(), out var _);
             }
-            _cache.Add(path, package);
+            _cache.TryAdd(path, package);
         }
     }
     public class EncryptionKey {

@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
@@ -70,6 +69,9 @@ namespace BlenderUmap {
                     provider.MappingsContainer = usmap;
                     Log.Information("Loaded mappings from {0}", newestUsmap.FullName);
                 }
+                else {
+                    provider.LoadMappings();
+                }
 
                 var pkg = ExportAndProduceProcessed(config.ExportPackage);
                 if (pkg == null) return;
@@ -95,6 +97,7 @@ namespace BlenderUmap {
 
         public static FileInfo GetNewestUsmap(DirectoryInfo directory) {
             FileInfo chosenFile = null;
+            if (!directory.Exists) return null;
             var files = directory.GetFiles().OrderByDescending(f => f.LastWriteTime);
             foreach (var f in files) {
                 if (f.Extension == ".usmap") {
@@ -218,13 +221,13 @@ namespace BlenderUmap {
             }
 
             /*if (config.bExportBuildingFoundations) {
-                foreach (var streamingLevelLazy in world.getStreamingLevels()) {
-                    UObject streamingLevel = streamingLevelLazy.getValue();
+                foreach (var streamingLevelLazy in world.StreamingLevels) {
+                    UObject streamingLevel = streamingLevelLazy.Load();
                     if (streamingLevel == null) continue;
 
                     var children = new JArray();
                     string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
-                    var cpkg = exportAndProduceProcessed(text.SubstringBeforeLast('.'));
+                    var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
                     children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
 
                     var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
@@ -490,7 +493,8 @@ namespace BlenderUmap {
                     array.Add(subArray);
                 }
 
-                obj.Add(PackageIndexToDirPath(Material), array);
+                if (!obj.ContainsKey(PackageIndexToDirPath(Material)))
+                    obj.Add(PackageIndexToDirPath(Material), array);
             }
         }
     }
