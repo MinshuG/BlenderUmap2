@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using BlenderUmap.Extensions;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
@@ -28,8 +29,8 @@ using static CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat;
 
 namespace BlenderUmap {
     public static class Program {
-        private static Config config;
-        private static MyFileProvider provider;
+        public static Config config;
+        public static MyFileProvider provider;
         private static readonly long start = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
         public static void Main(string[] args) {
@@ -117,6 +118,11 @@ namespace BlenderUmap {
                 return null;
             }
 
+            if (obj.ExportType == "FortPlaysetItemDefinition") {
+                FortPlaysetItemDefinition.ExportAndProduceProcessed(obj);
+                return obj.Owner;
+            }
+
             if (obj is not UWorld world) {
                 Log.Information("{0} is not a World, won't try to export", obj.GetPathName());
                 return null;
@@ -147,7 +153,7 @@ namespace BlenderUmap {
                 // region mesh
                 var mesh = staticMeshComp.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
 
-                if (mesh == null) { // read the actor class to find the mesh
+                if (mesh.IsNull) { // read the actor class to find the mesh
                     var actorBlueprint = actor.Class;
 
                     if (actorBlueprint is UBlueprintGeneratedClass) {
@@ -216,7 +222,7 @@ namespace BlenderUmap {
                 comp.Add(textureDataArr);
                 comp.Add(Vector(staticMeshComp.GetOrDefault<FVector>("RelativeLocation"))); // /Script/Engine.SceneComponent:RelativeLocation
                 comp.Add(Rotator(staticMeshComp.GetOrDefault<FRotator>("RelativeRotation"))); // /Script/Engine.SceneComponent:RelativeRotation
-                comp.Add(Vector(staticMeshComp.GetOrDefault<FVector>("RelativeScale3D"))); // /Script/Engine.SceneComponent:RelativeScale3D
+                comp.Add(Vector(staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector))); // /Script/Engine.SceneComponent:RelativeScale3D
                 comp.Add(children);
             }
 
@@ -259,7 +265,7 @@ namespace BlenderUmap {
             return pkg;
         }
 
-        private static void AddToArray(JArray array, FPackageIndex index) {
+        public static void AddToArray(JArray array, FPackageIndex index) {
             if (index != null) {
                 ExportTexture(index);
                 array.Add(PackageIndexToDirPath(index));
@@ -303,7 +309,7 @@ namespace BlenderUmap {
             }
         }
 
-        private static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
+        public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
             ThreadPool.QueueUserWorkItem((_) => {
@@ -360,9 +366,9 @@ namespace BlenderUmap {
             return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
         }
 
-        private static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
-        private static JArray Rotator(FRotator rotator) => new() {rotator.Pitch, rotator.Yaw, rotator.Roll};
-        private static JArray Quat(FQuat quat) => new() {quat.X, quat.Y, quat.Z, quat.W};
+        public static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
+        public static JArray Rotator(FRotator rotator) => new() {rotator.Pitch, rotator.Yaw, rotator.Roll};
+        public static JArray Quat(FQuat quat) => new() {quat.X, quat.Y, quat.Z, quat.W};
 
         private static char[] GetDDSFourCC(UTexture2D texture) => (texture.Format switch {
             PF_DXT1 => "DXT1",
@@ -373,7 +379,7 @@ namespace BlenderUmap {
             _ => null
         })?.ToCharArray();
 
-        private static T[] GetProps<T>(this IPropertyHolder obj, string name) {
+        public static T[] GetProps<T>(this IPropertyHolder obj, string name) {
             var collected = new List<FPropertyTag>();
             var maxIndex = -1;
             foreach (var prop in obj.Properties) {
@@ -399,7 +405,7 @@ namespace BlenderUmap {
             return default;
         }
 
-        private class Mat {
+        public class Mat {
             public FPackageIndex Material;
             private readonly Dictionary<string, FPackageIndex> _textureMap = new();
 
@@ -513,7 +519,7 @@ namespace BlenderUmap {
         public bool bExportToDDSWhenPossible = true;
         public bool bExportBuildingFoundations = true;
         public string ExportPackage;
-        public TextureMapping Textures;
+        public TextureMapping Textures = new();
     }
 
     public class TextureMapping {

@@ -9,7 +9,7 @@
   "ExportPackage": "Game/Maps/CoolMap.umap",
   "Textures": {
     "UV1": {
-      "Diffuse": ["CustomDiffuse", "Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"],
+      "Diffuse": ["Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"],
       "Normal": ["Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"],
       "Specular": ["Trunk_Specular", "SpecularMasks"],
       "Emission": ["EmissiveTexture"],
