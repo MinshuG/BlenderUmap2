@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -153,7 +153,7 @@ namespace BlenderUmap {
                 // region mesh
                 var mesh = staticMeshComp.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
 
-                if (mesh.IsNull) { // read the actor class to find the mesh
+                if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
                     var actorBlueprint = actor.Class;
 
                     if (actorBlueprint is UBlueprintGeneratedClass) {
