@@ -62,7 +62,7 @@ namespace BlenderUmap {
                 }
 
                 provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
-                provider.LoadVirtualPaths();
+                provider.LoadVirtualPaths(provider.Versions.Ver);
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
                     var usmap = new FileUsmapTypeMappingsProvider(newestUsmap.FullName);
@@ -77,7 +77,7 @@ namespace BlenderUmap {
                 var pkg = ExportAndProduceProcessed(config.ExportPackage);
                 if (pkg == null) return;
 
-                while (ThreadPool.PendingWorkItemCount == 0) { }
+                while (ThreadPool.PendingWorkItemCount != 0) { }
                 var file = new FileInfo("processed.json");
                 Log.Information("Writing to {0}", file.FullName);
                 using (var writer = file.CreateText()) {
@@ -109,7 +109,7 @@ namespace BlenderUmap {
             return chosenFile;
         }
 
-        private static IPackage ExportAndProduceProcessed(string path) {
+        public static IPackage ExportAndProduceProcessed(string path) {
             if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
                 path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
 

@@ -16,21 +16,25 @@ namespace BlenderUmap.Extensions {
     public static class FortPlaysetItemDefinition { // TODO: OverrideMaterials Support
         public static void ExportAndProduceProcessed(UObject obj) {
             var comps = new JArray();
-            foreach (var actor in obj.GetOrDefault<FStructFallback[]>("PreviewActorData")) {
+            var actors = obj.GetOrDefault<FStructFallback[]>("PreviewActorData");
+            for (var index = 0; index < actors.Length; index++) {
+                var actor = actors[index];
                 var comp = new JArray();
                 var ac = actor.GetOrDefault<UObject>("ActorClass");
                 if (ac == null) continue;
+                Log.Information("Loading {0}: {1}/{2} {3}", obj.Name, index, actors.Length, ac);
 
                 comps.Add(comp);
                 comp.Add(Guid.NewGuid().ToString().Replace("-", ""));
                 comp.Add(ac.Name.SubstringBefore("_C"));
 
-                UObject staticMeshComp = new UObject();
+                var staticMeshComp = new UObject();
+                var actorBlueprint = new UObject();
                 var mesh = new FPackageIndex();
-                if (ac is UBlueprintGeneratedClass actorBlueprint) {
-                    var mactor = actorBlueprint.ClassDefaultObject.Load(); 
-                    mesh = mactor?.GetOrDefault<FPackageIndex>("StaticMesh");
-                    staticMeshComp = mactor?.GetOrDefault<UObject>("StaticMeshComponent");
+                if (ac is UBlueprintGeneratedClass ab) {
+                    actorBlueprint = ab.ClassDefaultObject.Load();
+                    mesh = actorBlueprint?.GetOrDefault<FPackageIndex>("StaticMesh");
+                    staticMeshComp = actorBlueprint?.GetOrDefault<UObject>("StaticMeshComponent");
                 }
 
                 var matsObj = new JObject(); // matpath: [4x[str]]
@@ -42,7 +46,7 @@ namespace BlenderUmap.Extensions {
                     var material = actor.GetOrDefault<FPackageIndex>("BaseMaterial"); // /Script/FortniteGame.BuildingSMActor:BaseMaterial
                     var overrideMaterials = staticMeshComp?.GetOrDefault<List<FPackageIndex>>("OverrideMaterials"); // /Script/Engine.MeshComponent:OverrideMaterials
 
-                    foreach (var textureDataIdx in actor.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
+                    foreach (var textureDataIdx in actorBlueprint.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
                         var td = textureDataIdx?.Load();
                     
                         if (td != null) {
@@ -80,6 +84,25 @@ namespace BlenderUmap.Extensions {
                 comp.Add(Program.Vector(actor.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector))); // /Script/Engine.SceneComponent:RelativeScale3D
                 comp.Add(children);
             }
+
+            // if (obj.TryGetValue(out FSoftObjectPath child, "PlaysetToSpawn")) {
+            //     var children = new JArray();
+            //     var childPackage = Program.ExportAndProduceProcessed(child.AssetPathName.Text);
+            //
+            //     children.Add(childPackage != null ? Program.provider.CompactFilePath(childPackage.Name) : null);  
+            //     var comp = new JArray {
+            //         JValue.CreateNull(), // GUID
+            //         childPackage.Name,
+            //         JValue.CreateNull(), // mesh path
+            //         JValue.CreateNull(), // materials
+            //         JValue.CreateNull(), // texture data
+            //         Program.Vector(new FVector()), // location
+            //         Program.Quat(new FQuat()), // rotation
+            //         Program.Vector(new FVector(1)), // scale
+            //         children
+            //     };
+            //     comps.Add(comp);
+            // }
 
             var pkg = obj.Owner;
             string pkgName = Program.provider.CompactFilePath(pkg.Name).SubstringAfter("/");
