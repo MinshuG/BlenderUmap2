@@ -311,6 +311,7 @@ class FortniteMappings(bpy.types.Operator):
 
     def execute(self, context):
         self.check_mappings()
+        return {"FINISHED"}
 
     def check_mappings(self):
         path = bpy.context.scene.exportPath
@@ -318,7 +319,7 @@ class FortniteMappings(bpy.types.Operator):
         if not os.path.exists(mappings_path):
             os.makedirs(mappings_path)
             self.dl_mappings(mappings_path)
-            return False
+            return True
         try:
             self.dl_mappings(mappings_path)
         except: pass

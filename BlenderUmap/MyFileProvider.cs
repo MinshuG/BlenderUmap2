@@ -21,6 +21,7 @@ namespace BlenderUmap {
             _cache = new Cache(cacheSize);
             _bDumpAssets = bDumpAssets;
 
+            Initialize();
             var keysToSubmit = new Dictionary<FGuid, FAesKey>();
             foreach (var entry in encryptionKeys) {
                 if (!string.IsNullOrEmpty(entry.FileName)) {
@@ -36,7 +37,6 @@ namespace BlenderUmap {
                 }
             }
 
-            Initialize();
             SubmitKeys(keysToSubmit);
         }
 

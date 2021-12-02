@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -293,7 +293,7 @@ namespace BlenderUmap {
                         throw new NotImplementedException("DDS export is not implemented");
                     }
 
-                    ThreadPool.QueueUserWorkItem((x) => {
+                    ThreadPool.QueueUserWorkItem(_ => {
                         Log.Information("Saving texture to {0}", output.FullName);
                         using var image = texture.Decode(firstMip);
                         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -312,14 +312,17 @@ namespace BlenderUmap {
         public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
-            ThreadPool.QueueUserWorkItem((_) => {
+            var output = Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx");
+            if (File.Exists(output)) return;
+
+            ThreadPool.QueueUserWorkItem(_ => {
                 try {
                     var exporter = new MeshExporter(meshExport, exportMaterials: false);
                     if (exporter.MeshLods.Count == 0) {
                         Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
                         return;
                     }
-                    File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData); 
+                    File.WriteAllBytes(output, exporter.MeshLods.First().FileData); 
                 }
                 catch (IOException) { } // two threads trying to write same mesh
             });
