@@ -313,19 +313,20 @@ namespace BlenderUmap {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
             var output = Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx");
-            if (File.Exists(output)) return;
 
-            ThreadPool.QueueUserWorkItem(_ => {
-                try {
-                    var exporter = new MeshExporter(meshExport, exportMaterials: false);
-                    if (exporter.MeshLods.Count == 0) {
-                        Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                        return;
+            if (!File.Exists(output)) {
+                ThreadPool.QueueUserWorkItem(_ => {
+                    try {
+                        var exporter = new MeshExporter(meshExport, exportMaterials: false);
+                        if (exporter.MeshLods.Count == 0) {
+                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                            return;
+                        }
+                        File.WriteAllBytes(output, exporter.MeshLods.First().FileData);
                     }
-                    File.WriteAllBytes(output, exporter.MeshLods.First().FileData); 
-                }
-                catch (IOException) { } // two threads trying to write same mesh
-            });
+                    catch (IOException) { } // two threads trying to write same mesh
+                });
+            }
 
             if (config.bReadMaterials) {
                 var staticMaterials = meshExport.StaticMaterials;

@@ -5,6 +5,7 @@ import json
 import os
 from urllib.request import urlopen, Request
 import subprocess
+import sys
 
 from bpy.types import Context
 from .config import Config
@@ -24,12 +25,16 @@ def main(context, onlyimport=False):
 
     if not onlyimport:
         Config().dump(sc.exportPath)
-        exporter = os.path.join(addon_dir,"BlenderUmap.exe")
+        exporter = os.path.join(addon_dir,"BlenderUmap")
         addon_prefs = context.preferences.addons[__package__].preferences
         if addon_prefs.filepath != "":
             exporter = addon_prefs.filepath
-        cmd = ['START', '/WAIT', '/D', data_dir.replace(r"\\", "/"), 'cmd', '/K', exporter.replace(r"\\", "/")]
-        subprocess.run(cmd, capture_output=True, shell=True, check=True)
+        if sys.platform == "win32":
+            cmd = [exporter.replace(r"\\", "/")+".exe"]
+        else:
+            cmd = [exporter.replace(r"\\", "/")]
+
+        subprocess.run(cmd, capture_output=False, shell=False, check=True, cwd=data_dir.replace(r"\\", "/"))
 
     uvm = bpy.data.node_groups.get("UV Shader Mix")
     tex_shader = bpy.data.node_groups.get("Texture Shader")
@@ -232,12 +237,9 @@ class VIEW_PT_UmapOperator(bpy.types.Operator):
             if not os.path.exists(os.path.join(bpy.context.scene.exportPath, "umodel.exe")):
                 self.report({'ERROR'}, 'umodel.exe not found in Export Directory(Export Path)')
                 return {"CANCELLED"}
-        try:
-            main(context)
-            return {"FINISHED"}
-        except:
-            self.report({'ERROR'}, 'failed to run')
-            return {"CANCELLED"}
+
+        main(context)
+        return {"FINISHED"}
 
 class VIEW_PT_UmapOnlyImport(bpy.types.Operator):
     """Only import already exported umap"""
