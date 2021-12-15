@@ -186,10 +186,22 @@ def import_material(ob: bpy.types.Object,
 
         print("Material imported")
 
-    if m_idx < len(ob.data.materials):
-        ob.data.materials[m_idx] = m
+    # if m_idx < len(ob.data.materials):
+    #     ob.data.materials[m_idx] = m
+    found_index = find_mat_index(ob.data.materials, m.name[:-4])  # remove .mat
+    if found_index is None:
+        if m_idx < len(ob.data.materials):
+            ob.data.materials[m_idx] = m
+    else:
+        ob.data.materials[found_index] = m
 
     return m
+
+def find_mat_index(materials, mat_name):
+    for i, mat in enumerate(materials):
+        if mat.name == mat_name:
+            return i
+    return None
 
 def place_map(collection: bpy.types.Collection, into_collection: bpy.types.Collection):
     c_inst = bpy.data.objects.new(collection.name, None)
