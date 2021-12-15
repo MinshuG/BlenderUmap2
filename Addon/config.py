@@ -6,9 +6,9 @@ import json
 from dataclasses import dataclass
 
 import bpy
-from bpy.types import Mask
 
 T = TypeVar("T")
+
 
 @dataclass
 class Textures:
@@ -27,35 +27,42 @@ class Textures:
             "MaskTexture": self.Mask
         }
 
+
 class TextureMapping:
-    UV1: Textures = Textures(
-        ["Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"],
-        ["Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"],
-        ["Trunk_Specular", "SpecularMasks"],
-        ["EmissiveTexture"],
-        ["MaskTexture"]
-    )
-    UV2: Textures = Textures(
-        ["Diffuse_Texture_2"],
-        ["Normals_Texture_2"],
-        ["Specular_Texture_2"],
-        ["Emissive_Texture_2"],
-        ["MaskTexture_2"]
-    )
-    UV3: Textures = Textures(
-        ["Diffuse_Texture_3"],
-        ["Normals_Texture_3"],
-        ["Specular_Texture_3"],
-        ["Emissive_Texture_3"],
-        ["MaskTexture_3"]
-    )
-    UV4: Textures = Textures(
-        ["Diffuse_Texture_4"],
-        ["Normals_Texture_4"],
-        ["Specular_Texture_4"],
-        ["Emissive_Texture_4"],
-        ["MaskTexture_4"]
-    )
+    UV1: Textures
+    UV2: Textures
+    UV3: Textures
+    UV4: Textures
+
+    def __init__(self) -> None:
+        self.UV1 = Textures(
+            ["Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"],
+            ["Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"],
+            ["Trunk_Specular", "SpecularMasks"],
+            ["EmissiveTexture"],
+            ["MaskTexture"]
+        )
+        self.UV2 = Textures(
+            ["Diffuse_Texture_3"],
+            ["Normals_Texture_3"],
+            ["Specular_Texture_3"],
+            ["Emissive_Texture_3"],
+            ["MaskTexture_3"]
+        )
+        self.UV3 = Textures(
+            ["Diffuse_Texture_4"],
+            ["Normals_Texture_4"],
+            ["Specular_Texture_4"],
+            ["Emissive_Texture_4"],
+            ["MaskTexture_4"]
+        )
+        self.UV4 = Textures(
+            ["Diffuse_Texture_2"],
+            ["Normals_Texture_2"],
+            ["Specular_Texture_2"],
+            ["Emissive_Texture_2"],
+            ["MaskTexture_2"]
+        )
 
     def to_dict(self):
         return {
@@ -65,9 +72,11 @@ class TextureMapping:
             "UV4": self.UV4.to_dict()
         }
 
+
 class MyEncoder(JSONEncoder):
-        def default(self, o):
-            return o.to_dict()
+    def default(self, o):
+        return o.to_dict()
+
 
 def aeskeys_from_list(x: Any) -> List[T]:
     l = []
@@ -92,15 +101,17 @@ def aeskeys_from_list(x: Any) -> List[T]:
         l.append(d)
     return l
 
-def textures_to_mapping(context: bpy.context) ->TextureMapping:    
+
+def textures_to_mapping(context: bpy.context) -> TextureMapping:
     temp_map = TextureMapping()
-    for i in range(1, 5): # 4UVs
+    for i in range(1, 5):  # 4UVs
         for t in ["Diffuse", "Normal", "Specular", "Emission", "Mask"]:
             textures = getattr(context, f"{t}_{i}".lower(), "").split(",")
             textures = [x.strip() for x in textures]
             if len(t) != 0 and textures != ['']:
-                setattr(getattr(temp_map, f"UV{i}"), t, textures) # basically temp_map.UV{i}.{Texture} = textures
+                setattr(getattr(temp_map, f"UV{i}"), t, textures)  # temp_map.UV{i}.{Texture} = textures
     return temp_map
+
 
 class Config:
     Documentation: str = "https://github.com/Amrsatrio/BlenderUmap/blob/master/README.md"
@@ -112,12 +123,12 @@ class Config:
     ObjectCacheSize: int
     bReadMaterials: bool
     bExportToDDSWhenPossible: bool
-    bExportBuildingFoundations: bool    
+    bExportBuildingFoundations: bool
     ExportPackage: str
 
     def __init__(self) -> None:
         sc = bpy.context.scene
-        self.PaksDirectory = sc.Game_Path[:-1]
+        self.PaksDirectory = sc.Game_Path
         self.ExportPath = sc.exportPath
         self.bUseCustomEngineVer = sc.bUseCustomEngineVer
         self.CustomVersion = sc.customEngineVer
@@ -146,7 +157,7 @@ class Config:
                         }
         return result
 
-    def load(self, out=None): #TODO: load textures
+    def load(self, out=None):  # TODO: load textures
         if not os.path.exists(os.path.join(self.ExportPath, "config.json")):
             return
         with open(os.path.join(self.ExportPath, "config.json"), "r") as f:
@@ -156,7 +167,7 @@ class Config:
 
         sc = bpy.context.scene
 
-        sc.Game_Path = data["PaksDirectory"] + "/"
+        sc.Game_Path = data["PaksDirectory"]
         sc.exportPath = data.get("ExportPath") or self.ExportPath
 
         version = data["UEVersion"]

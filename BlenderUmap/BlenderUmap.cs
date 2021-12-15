@@ -185,7 +185,7 @@ namespace BlenderUmap {
                             AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
                             textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
-                            if (overrideMaterial != null) {
+                            if (overrideMaterial is {IsNull: false}) {
                                 material = overrideMaterial;
                             }
                         } else {
@@ -196,7 +196,7 @@ namespace BlenderUmap {
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
                         if (material != null) {
-                            mat.Material = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] != null ? overrideMaterials[i] : material;
+                            mat.Material = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
                         }
 
                         mat.PopulateTextures();
@@ -403,8 +403,10 @@ namespace BlenderUmap {
         
         private static T GetAnyValueOrDefault<T>(this Dictionary<string, T> dict, string[] keys) {
             foreach (var key in keys) {
-                if (dict.ContainsKey(key))
-                    return dict.GetValueOrDefault(key);
+                foreach (var kvp in dict) {
+                    if (kvp.Key.StartsWith(key))
+                        return kvp.Value;
+                }
             }
             return default;
         }
@@ -422,7 +424,7 @@ namespace BlenderUmap {
             }
 
             private void PopulateTextures(UObject obj) {
-                if (obj is not UMaterialInstance material) {
+                if (obj is not UMaterialInterface material) {
                     return;
                 }
 
@@ -440,8 +442,10 @@ namespace BlenderUmap {
                     }
                 }
 
-                if (material.Parent != null) {
-                    PopulateTextures(material.Parent);
+                if (material is UMaterialInstance mi) {
+                    if (mi.Parent != null) {
+                        PopulateTextures(mi.Parent);
+                    }
                 }
             }
 
