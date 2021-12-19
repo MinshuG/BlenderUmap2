@@ -67,7 +67,8 @@ namespace BlenderUmap.Extensions {
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
                         if (material != null) {
-                            mat.Material = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] != null ? overrideMaterials[i] : material;
+                            var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] != null ? overrideMaterials[i] : material;
+                            mat.Material = matIndex?.ResolvedObject;
                         }
 
                         mat.PopulateTextures();

@@ -196,7 +196,8 @@ namespace BlenderUmap {
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
                         if (material != null) {
-                            mat.Material = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
+                            var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
+                            mat.Material = matIndex.ResolvedObject;
                         }
 
                         mat.PopulateTextures();
@@ -360,14 +361,17 @@ namespace BlenderUmap {
             return outputDir;
         }
 
-        public static string PackageIndexToDirPath(FPackageIndex index) {
-            var obj = index?.ResolvedObject;
+        public static string PackageIndexToDirPath(ResolvedObject obj) {
             if (obj == null) return null;
 
             string pkgPath = provider.CompactFilePath(obj.Package.Name);
             pkgPath = pkgPath.SubstringBeforeLast('.');
             var objectName = obj.Name.Text;
             return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
+        }
+
+        public static string PackageIndexToDirPath(FPackageIndex obj) {
+            return PackageIndexToDirPath(obj?.ResolvedObject);
         }
 
         public static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
@@ -412,10 +416,10 @@ namespace BlenderUmap {
         }
 
         public class Mat {
-            public FPackageIndex Material;
+            public ResolvedObject Material;
             private readonly Dictionary<string, FPackageIndex> _textureMap = new();
 
-            public Mat(FPackageIndex material) {
+            public Mat(ResolvedObject material) {
                 Material = material;
             }
 
@@ -450,7 +454,7 @@ namespace BlenderUmap {
             }
 
             public void AddToObj(JObject obj) {
-                if (Material == null || Material.IsNull) {
+                if (Material == null) {
                     obj.Add(GetHashCode().ToString("x"), null);
                     return;
                 }
