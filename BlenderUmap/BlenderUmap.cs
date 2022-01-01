@@ -119,8 +119,7 @@ namespace BlenderUmap {
             }
 
             if (obj.ExportType == "FortPlaysetItemDefinition") {
-                FortPlaysetItemDefinition.ExportAndProduceProcessed(obj);
-                return obj.Owner;
+                return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj);
             }
 
             if (obj is not UWorld world) {
@@ -282,8 +281,6 @@ namespace BlenderUmap {
                     return;
                 }
 
-                // CUE4Parse only reads the first FTexturePlatformData and drops the rest
-                var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                 char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
                 var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
 
@@ -296,6 +293,8 @@ namespace BlenderUmap {
 
                     ThreadPool.QueueUserWorkItem(_ => {
                         Log.Information("Saving texture to {0}", output.FullName);
+                        // CUE4Parse only reads the first FTexturePlatformData and drops the rest
+                        var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                         using var image = texture.Decode(firstMip);
                         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
                         try {
@@ -318,6 +317,7 @@ namespace BlenderUmap {
             if (!File.Exists(output)) {
                 ThreadPool.QueueUserWorkItem(_ => {
                     try {
+                        Log.Information("Saving mesh to {0}", meshExport);
                         var exporter = new MeshExporter(meshExport, exportMaterials: false);
                         if (exporter.MeshLods.Count == 0) {
                             Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
