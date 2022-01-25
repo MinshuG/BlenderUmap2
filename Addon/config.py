@@ -190,7 +190,8 @@ class Config:
         sc.list_index = 0
         i = 0
         for x in data["EncryptionKeys"]:
-            if guid := x.get("Guid"):
+            guid = x.get("Guid")
+            if guid is not None:
                 if guid == "00000000000000000000000000000000":
                     sc.aeskey = x["Key"]
                     continue

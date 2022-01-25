@@ -68,7 +68,7 @@ namespace BlenderUmap.Extensions {
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
-                            textureDataArr.Add(new JArray {Program.PackageIndexToDirPath(textureDataIdx), textures});
+                            textureDataArr.Add(new JArray { Program.PackageIndexToDirPath(textureDataIdx), textures });
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
                             if (overrideMaterial != null) {
                                 material = overrideMaterial;
