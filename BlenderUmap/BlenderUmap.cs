@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -38,9 +37,10 @@ namespace BlenderUmap {
                 .MinimumLevel.Information()
                 .WriteTo.Console()
                 .CreateLogger();
-
-            try {
-                var configFile = new FileInfo("config.json");
+#if !DEBUG
+        try {       
+#endif
+            var configFile = new FileInfo("config.json");
                 if (!configFile.Exists) {
                     Log.Error("config.json not found");
                     return;
@@ -86,7 +86,9 @@ namespace BlenderUmap {
                 }
 
                 Log.Information("All done in {0:F1} sec. In the Python script, replace the line with data_dir with this line below:\n\ndata_dir = r\"{1}\"", (DateTimeOffset.Now.ToUnixTimeMilliseconds() - start) / 1000.0F, Directory.GetCurrentDirectory());
-            } catch (Exception e) {
+            }
+#if !DEBUG
+        catch (Exception e) {
                 if (e is MainException) {
                     Log.Information(e.Message);
                 } else {
@@ -95,6 +97,7 @@ namespace BlenderUmap {
                 Environment.Exit(1);
             }
         }
+#endif
 
         public static FileInfo GetNewestUsmap(DirectoryInfo directory) {
             FileInfo chosenFile = null;
@@ -110,12 +113,25 @@ namespace BlenderUmap {
         }
 
         public static IPackage ExportAndProduceProcessed(string path) {
-            if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
-                path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
+            UObject obj = null;
+            if (provider.TryLoadPackage(path, out var pkg)) { // multiple exports with package name
+                if (pkg is Package notioPackage) {
+                    foreach (var export in notioPackage.ExportMap) {
+                        if (export.ClassName == "World"){
+                            obj = export.ExportObject.Value;
+                        }
+                    }
+                }
+            }
 
-            if (!provider.TryLoadObject(path, out var obj)) {
-                Log.Warning("Object {0} not found", path);
-                return null;
+            if (obj == null) {
+                if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                    path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
+
+                if (!provider.TryLoadObject(path, out obj)) {
+                    Log.Warning("Object {0} not found", path);
+                    return null;
+                }
             }
 
             if (obj.ExportType == "FortPlaysetItemDefinition") {
@@ -253,7 +269,7 @@ namespace BlenderUmap {
                 }
             }*/
 
-            var pkg = world.Owner;
+            // var pkg = world.Owner;
             string pkgName = provider.CompactFilePath(pkg.Name).SubstringAfter("/");
             var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
             file.Directory.Create();
@@ -330,10 +346,10 @@ namespace BlenderUmap {
             }
 
             if (config.bReadMaterials) {
-                var staticMaterials = meshExport.StaticMaterials;
-                if (staticMaterials != null) {
-                    foreach (var staticMaterial in staticMaterials) {
-                        materials.Add(new Mat(staticMaterial.MaterialInterface));
+                var matObjs = meshExport.Materials;
+                if (matObjs != null) {
+                    foreach (var material in matObjs) {
+                        materials.Add(new Mat(material));
                     }
                 }
             }
@@ -408,7 +424,7 @@ namespace BlenderUmap {
         private static T GetAnyValueOrDefault<T>(this Dictionary<string, T> dict, string[] keys) {
             foreach (var key in keys) {
                 foreach (var kvp in dict) {
-                    if (kvp.Key.StartsWith(key))
+                    if (kvp.Key.Equals(key))
                         return kvp.Value;
                 }
             }
@@ -432,10 +448,42 @@ namespace BlenderUmap {
                     return;
                 }
 
+                #region PossiblyOldFormat
+
+                foreach (var propertyTag in material.Properties) {
+                    if (propertyTag.Tag == null) return;
+
+                    var text = propertyTag.Tag.GetValue(typeof(FExpressionInput));
+                    if (text is FExpressionInput materialInput) {
+                        var expression = obj.Owner!.GetExportOrNull(materialInput.ExpressionName.ToString());
+                        if (expression != null && expression.TryGetValue(out FPackageIndex texture, "Texture")) {
+                            if (!_textureMap.ContainsKey(propertyTag.Name.ToString())) {
+                                _textureMap[propertyTag.Name.ToString()] = texture;
+                            }
+                        }
+                    }
+                }
+                
+                if (material.TryGetValue(out UObject[] exports, "Expressions")) {
+                    foreach (var export in exports) {
+                        if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
+                            if (export.TryGetValue(out FPackageIndex parameterValue, "Texture")) {
+                                if (!_textureMap.ContainsKey(name.Text)) {
+                                    _textureMap[name.Text] = parameterValue;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // for some materials we still don't have the textures
+                #endregion
+                
                 var textureParameterValues =
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
                     foreach (var textureParameterValue in textureParameterValues) {
+                        if (textureParameterValue.ParameterInfo == null) continue;
                         var name = textureParameterValue.ParameterInfo.Name;
                         if (!name.IsNone) {
                             var parameterValue = textureParameterValue.ParameterValue;
