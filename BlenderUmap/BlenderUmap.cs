@@ -270,7 +270,7 @@ namespace BlenderUmap {
             }*/
 
             // var pkg = world.Owner;
-            string pkgName = provider.CompactFilePath(pkg.Name).SubstringAfter("/");
+            string pkgName = provider.CompactFilePath(obj.Owner.Name).SubstringAfter("/");
             var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
             file.Directory.Create();
             Log.Information("Writing to {0}", file.FullName);
@@ -278,7 +278,7 @@ namespace BlenderUmap {
             using var writer = file.CreateText();
             new JsonSerializer().Serialize(writer, comps);
 
-            return pkg;
+            return obj.Owner;
         }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
