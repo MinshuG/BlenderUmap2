@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using BlenderUmap.Extensions;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
@@ -18,6 +19,7 @@ using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.UE4.Versions;
 using CUE4Parse.Utils;
+using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Meshes;
 using CUE4Parse_Conversion.Textures;
 using Newtonsoft.Json;
@@ -210,9 +212,9 @@ namespace BlenderUmap {
 
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
-                        if (material != null) {
-                            var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
-                            mat.Material = matIndex.ResolvedObject;
+                        if (material != null || overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
+                            // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
+                            mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
                         }
 
                         mat.PopulateTextures();
@@ -331,18 +333,18 @@ namespace BlenderUmap {
             var output = Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx");
 
             if (!File.Exists(output)) {
-                ThreadPool.QueueUserWorkItem(_ => {
+            ThreadPool.QueueUserWorkItem(_ => {
                     try {
                         Log.Information("Saving mesh to {0}", meshExport);
                         var exporter = new MeshExporter(meshExport, exportMaterials: false);
-                        if (exporter.MeshLods.Count == 0) {
-                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                            return;
-                        }
+                    if (exporter.MeshLods.Count == 0) {
+                        Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                        return;
+                    }
                         File.WriteAllBytes(output, exporter.MeshLods.First().FileData);
                     }
                     catch (IOException) { } // two threads trying to write same mesh
-                });
+            });
             }
 
             if (config.bReadMaterials) {
@@ -366,7 +368,7 @@ namespace BlenderUmap {
             }
 
             var outputDir = new FileInfo(pkgPath).Directory;
-            string pkgName = pkgPath.SubstringAfterLast('/');
+            // string pkgName = pkgPath.SubstringAfterLast('/');
 
             // what's this for?
             // if (exportObj.Name != pkgName) {
@@ -584,32 +586,32 @@ namespace BlenderUmap {
 
     public class TextureMapping {
         public TextureMap UV1 = new() {
-            Diffuse = new[] {"Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color" },
+            Diffuse = new[] {"Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"},
             Normal = new[] {"Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"},
             Specular = new[] {"Trunk_Specular", "SpecularMasks"},
             Emission = new[] {"EmissiveTexture"},
-            MaskTexture = new[] { "MaskTexture" }
+            MaskTexture = new[] {"MaskTexture"}
         };
         public TextureMap UV2 = new() {
             Diffuse = new[] {"Diffuse_Texture_3"},
             Normal = new[] {"Normals_Texture_3"},
             Specular = new[] {"SpecularMasks_3"},
             Emission = new[] {"EmissiveTexture_3"},
-            MaskTexture = new[] { "MaskTexture_3" }
+            MaskTexture = new[] {"MaskTexture_3"}
         };
         public TextureMap UV3 = new() {
             Diffuse = new[] {"Diffuse_Texture_4"},
             Normal = new[] {"Normals_Texture_4"},
             Specular = new[] {"SpecularMasks_4"},
             Emission = new[] {"EmissiveTexture_4"},
-            MaskTexture = new[] { "MaskTexture_4" }
+            MaskTexture = new[] {"MaskTexture_4"}
             };
         public TextureMap UV4 = new() {
             Diffuse = new[] {"Diffuse_Texture_2"},
             Normal = new[] {"Normals_Texture_2"},
             Specular = new[] {"SpecularMasks_2"},
             Emission = new[] {"EmissiveTexture_2"},
-            MaskTexture = new[] { "MaskTexture_2" }
+            MaskTexture = new[] {"MaskTexture_2"}
             };
     }
 

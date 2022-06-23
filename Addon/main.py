@@ -37,6 +37,9 @@ def main(context, onlyimport=False):
             executable = exporter.replace(r"\\", "/")
             cmd = []
 
+        env_vars = os.environ.copy()
+        env_vars["PATH"] = f"{sc.exportPath};" + env_vars["PATH"]
+
         subprocess.run(
             cmd,
             executable=executable,
@@ -44,6 +47,7 @@ def main(context, onlyimport=False):
             shell=False,
             check=True,
             cwd=data_dir.replace(r"\\", "/"),
+            env=env_vars
         )
 
     uvm = bpy.data.node_groups.get("UV Shader Mix")
