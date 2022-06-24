@@ -330,20 +330,25 @@ namespace BlenderUmap {
         public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
-            var output = Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx");
+            var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
 
-            if (!File.Exists(output)) {
+             if (!output.Exists) {
             ThreadPool.QueueUserWorkItem(_ => {
-                    try {
-                        Log.Information("Saving mesh to {0}", meshExport);
-                        var exporter = new MeshExporter(meshExport, exportMaterials: false);
+                    if (!output.Exists) {
+                        Log.Information("Saving mesh to {0}", output.FullName);
+                    var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
                     if (exporter.MeshLods.Count == 0) {
                         Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
                         return;
                     }
-                        File.WriteAllBytes(output, exporter.MeshLods.First().FileData);
+
+                        try {
+                            var stream = output.OpenWrite();
+                            stream.Write(exporter.MeshLods.First().FileData);
+                            stream.Close();
                     }
                     catch (IOException) { } // two threads trying to write same mesh
+                    }
             });
             }
 
