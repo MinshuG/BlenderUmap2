@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -332,24 +332,24 @@ namespace BlenderUmap {
             if (meshExport == null) return;
             var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
 
-             if (!output.Exists) {
-            ThreadPool.QueueUserWorkItem(_ => {
+            if (!output.Exists) {
+                ThreadPool.QueueUserWorkItem(_ => {
                     if (!output.Exists) {
                         Log.Information("Saving mesh to {0}", output.FullName);
-                    var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
-                    if (exporter.MeshLods.Count == 0) {
-                        Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                        return;
-                    }
+                        var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
+                        if (exporter.MeshLods.Count == 0) {
+                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                            return;
+                        }
 
                         try {
                             var stream = output.OpenWrite();
                             stream.Write(exporter.MeshLods.First().FileData);
                             stream.Close();
+                        }
+                        catch (IOException) { } // two threads trying to write same mesh
                     }
-                    catch (IOException) { } // two threads trying to write same mesh
-                    }
-            });
+                });
             }
 
             if (config.bReadMaterials) {
@@ -382,6 +382,13 @@ namespace BlenderUmap {
 
             outputDir.Create();
             return outputDir;
+        }
+
+        public static string PackageIndexToDirPath(UObject obj) {
+            string pkgPath = provider.CompactFilePath(obj.Owner.Name);
+            pkgPath = pkgPath.SubstringBeforeLast('.');
+            var objectName = obj.Name;
+            return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
         }
 
         public static string PackageIndexToDirPath(ResolvedObject obj) {
