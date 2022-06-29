@@ -137,7 +137,7 @@ namespace BlenderUmap {
             }
 
             if (obj.ExportType == "FortPlaysetItemDefinition") {
-                return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj);
+                return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj, provider);
             }
 
             if (obj is not UWorld world) {

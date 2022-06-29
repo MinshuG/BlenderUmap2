@@ -15,7 +15,7 @@ using Serilog;
 
 namespace BlenderUmap.Extensions {
     public static class FortPlaysetItemDefinition {
-        public static IPackage ExportAndProduceProcessed(UObject obj) {
+        public static IPackage ExportAndProduceProcessed(UObject obj, MyFileProvider provider) {
             var comps = new JArray();
             var recordLazy = obj.GetOrDefault<FPackageIndex>("PlaysetPropLevelSaveRecordCollection");
             if (recordLazy == null || recordLazy.IsNull) return null;
@@ -60,22 +60,10 @@ namespace BlenderUmap.Extensions {
                     var material = ac.GetOrDefault<FPackageIndex>("BaseMaterial");
                     var overrideMaterials = staticMeshComp?.GetOrDefault<List<FPackageIndex>>("OverrideMaterials");
 
-                    var actorDatas = templeteRecords.ReadActorData();
-                    var textureData = new List<string?>();
-                    foreach (var actorData in actorDatas) {
-                        if (actorData is FActorObjectProperty actorObj) {
-                            if (actorObj.Name != "TextureData")
-                                continue;
-                            textureData.EnsureCapacity(actorObj.Value.index+1);
-                            while (textureData.Count < actorObj.Value.index) {
-                                textureData.Add(null);
-                            }
-                            textureData.Insert(actorObj.Value.index, actorObj.Value.value);
-                        }
-                    }
-                    foreach (var textureDatapkg in textureData) { // /Script/FortniteGame.BuildingSMActor:TextureData
-                        if (textureDatapkg != null) {
-                            var td = obj.Owner.Provider.LoadObject<UObject>(textureDatapkg);
+                    var actorDatas = templeteRecords.ReadActorData(actorRecord.Owner, actorRecord.SaveVersion);
+
+                    foreach (var tdPkg in actorDatas.GetProps<string>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
+                        if (provider.TryLoadObject(tdPkg, out var td)) {
                             var textures = new JArray();
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
