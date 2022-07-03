@@ -16,10 +16,10 @@ for target in ["win-x64", "osx-x64", "linux-x64"]:
             os.remove(f)
     except FileNotFoundError: pass
 
-    code = os.system(f"dotnet publish -c Release -r {target} --no-self-contained -o \"./BlenderUmap/bin/Publish/\" -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -p:IncludeAllContentForSelfExtract=true")
+    code = os.system(f"dotnet publish BlenderUmap -c Release -r {target} --no-self-contained -o \"./BlenderUmap/bin/Publish/\" -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -p:IncludeAllContentForSelfExtract=true")
     if code != 0:
         raise Exception(f"dotnet publish failed with code {code}")
-    zipf = zipfile.ZipFile(f'release/BlenderUmap-{target}.zip', 'w', zipfile.ZIP_DEFLATED)
+    zipf = zipfile.ZipFile(f'release/BlenderUmap-{target}.zip', 'w', zipfile.ZIP_LZMA, allowZip64=True, compresslevel=9)
     add_files_to_zip(zipf, "./BlenderUmap/bin/Publish/**", "BlenderUmap/")
     add_files_to_zip(zipf, "./Addon/*.py", "BlenderUmap/")
     zipf.close()

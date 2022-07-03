@@ -212,7 +212,7 @@ namespace BlenderUmap {
 
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
-                        if (material != null || overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
+                        if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
                             // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
                             mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
                         }
