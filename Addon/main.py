@@ -325,13 +325,16 @@ class Fortnite(bpy.types.Operator):
         try:
             data = json.loads(raw_data)["data"]
         except Exception as e:
-            self.report({"ERROR"}, "Error Loading JSON \n{e}")
+            self.report({"ERROR"}, "Error loading JSON \n{e}")
             return {"CANCELLED"}
 
-        main_key = data["mainKey"]
-        bpy.context.scene.aeskey = (
-            main_key if main_key.startswith("0x") else f"0x{main_key}"
-        )
+        main_key = data.get("mainKey", None)
+        if main_key is None:
+            self.report({"ERROR"}, "failed get main key")
+        else:
+            bpy.context.scene.aeskey = (
+                main_key if main_key.startswith("0x") else f"0x{main_key}"
+            )
 
         dpklist = context.scene.dpklist
         context.scene.list_index = len(dpklist)
@@ -381,7 +384,7 @@ class FortniteMappings(bpy.types.Operator):
         return True
 
     def dl_mappings(self, path):
-        ENDPOINT = "https://benbot.app/api/v1/mappings"
+        ENDPOINT = "https://fortnitecentral.gmatrixgames.ga/api/v1/mappings"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
