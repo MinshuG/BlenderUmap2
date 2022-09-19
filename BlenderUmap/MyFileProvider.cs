@@ -3,10 +3,17 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
+using CUE4Parse.FileProvider.Vfs;
 using CUE4Parse.UE4.Assets;
+using CUE4Parse.UE4.Assets.Exports;
+using CUE4Parse.UE4.IO.Objects;
 using CUE4Parse.UE4.Objects.Core.Misc;
+using CUE4Parse.UE4.Pak.Objects;
+using CUE4Parse.UE4.Readers;
 using CUE4Parse.UE4.Versions;
 using CUE4Parse.Utils;
 using Newtonsoft.Json;
@@ -54,6 +61,85 @@ namespace BlenderUmap {
             }
             return false;
         }
+
+        // public override async Task<UObject?> TryLoadObjectAsync(string? objectPath)
+        // {
+        //     if (objectPath == null || objectPath.Equals("None", IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return null;
+        //     var packagePath = objectPath;
+        //     string objectName;
+        //     var dotIndex = packagePath.IndexOf('.');
+        //     if (dotIndex == -1) // use the package name as object name
+        //     {
+        //         objectName = packagePath.SubstringAfterLast('/');
+        //     }
+        //     else // packagePath.objectName
+        //     {
+        //         objectName = packagePath.Substring(dotIndex + 1);
+        //         packagePath = packagePath.Substring(0, dotIndex);
+        //     }
+        //
+        //     var pkg = await TryLoadPackageAsync(packagePath).ConfigureAwait(false);
+        //     return pkg?.GetExportOrNull(objectName, IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        // }
+        //
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool TryLoadObject(string? objectPath, out UObject export)
+        {
+            export = TryLoadObjectAsync(objectPath).Result;
+            return export != null;
+        }
+
+        public override async Task<IPackage?> TryLoadPackageAsync(string path)
+        {
+            if (!TryFindGameFile(path, out var file))
+            {
+                return null;
+            }
+        
+            if (TryLoadPackage(path, out var package)) {
+                return package;
+            }
+            
+            return await TryLoadPackageAsync(file).ConfigureAwait(false);
+        }
+
+        // public override async Task<IPackage?> TryLoadPackageAsync(GameFile file)
+        // {
+        //     if (!file.IsUE4Package)
+        //         return null;
+        //     Files.TryGetValue(file.PathWithoutExtension + ".uexp", out var uexpFile);
+        //     Files.TryGetValue(file.PathWithoutExtension + ".ubulk", out var ubulkFile);
+        //     Files.TryGetValue(file.PathWithoutExtension + ".uptnl", out var uptnlFile);
+        //     var uassetTask = file.TryCreateReaderAsync().ConfigureAwait(false);
+        //     var uexpTask = uexpFile?.TryCreateReaderAsync().ConfigureAwait(false);
+        //     var lazyUbulk = ubulkFile != null ? new Lazy<FArchive?>(() => ubulkFile.TryCreateReader(out var reader) ? reader : null) : null;
+        //     var lazyUptnl = uptnlFile != null ? new Lazy<FArchive?>(() => uptnlFile.TryCreateReader(out var reader) ? reader : null) : null;
+        //     var uasset = await uassetTask;
+        //     if (uasset == null)
+        //         return null;
+        //     var uexp = uexpTask != null ? await uexpTask.Value : null;
+        //
+        //     try
+        //     {
+        //         if (file is FPakEntry or OsGameFile)
+        //         {
+        //             return new Package(uasset, uexp, lazyUbulk, lazyUptnl, this, MappingsForThisGame, UseLazySerialization);
+        //         }
+        //
+        //         if (file is FIoStoreEntry ioStoreEntry)
+        //         {
+        //             var globalData = ((IVfsFileProvider) this).GlobalData;
+        //             return globalData != null ? new IoPackage(uasset, globalData, ioStoreEntry.IoStoreReader.ContainerHeader, lazyUbulk, lazyUptnl, this, MappingsForThisGame) : null;
+        //         }
+        //
+        //         return null;
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Log.Error(e, "Failed to load package " + file);
+        //         return null;
+        //     }
+        // }
 
         public void DumpJson(IPackage package) {
             var output = new FileInfo(Path.Combine(Program.GetExportDir(package).ToString(), package.Name.SubstringAfterLast("/") + ".json"));

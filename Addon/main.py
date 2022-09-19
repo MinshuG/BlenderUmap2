@@ -30,7 +30,7 @@ def main(context, onlyimport=False):
         addon_prefs = context.preferences.addons[__package__].preferences
         if addon_prefs.filepath != "":
             exporter = addon_prefs.filepath
-        if sys.platform == "win32":
+        if sys.platform == "win32" and not exporter.endswith(".exe"):
             executable = exporter.replace(r"\\", "/") + ".exe"
             cmd = []
         else:

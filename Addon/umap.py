@@ -8,7 +8,7 @@ import os
 import time
 from io_import_scene_unreal_psa_psk_280 import pskimport
 from math import *
-
+from .piana import *
 
 # ---------- END INPUTS, DO NOT MODIFY ANYTHING BELOW UNLESS YOU NEED TO ----------
 def import_umap(processed_map_path: str,
@@ -28,6 +28,12 @@ def import_umap(processed_map_path: str,
     with open(os.path.join(data_dir, "jsons" + processed_map_path + ".processed.json")) as file:
         comps = json.loads(file.read())
 
+    blights_exist = False
+    if os.path.exists(os.path.join(data_dir, "jsons" + processed_map_path + ".lights.processed.json")):
+        with open(os.path.join(data_dir, "jsons" + processed_map_path + ".lights.processed.json")) as file:
+            lights = json.loads(file.read())
+        blights_exist = True
+
     for comp_i, comp in enumerate(comps):
         # guid = comp[0]
         name = comp[1]
@@ -38,6 +44,8 @@ def import_umap(processed_map_path: str,
         rotation = comp[6] or [0, 0, 0]
         scale = comp[7] or [1, 1, 1]
         child_comps = comp[8]
+        light_index = comp[9] if blights_exist else -1
+
         print("\nActor %d of %d: %s" % (comp_i + 1, len(comps), name))
 
         def apply_ob_props(ob: bpy.types.Object, new_name: str = name) -> bpy.types.Object:
@@ -52,6 +60,10 @@ def import_umap(processed_map_path: str,
             ob = apply_ob_props(bpy.data.objects.new(name, data or bpy.data.meshes["__fallback" if use_cube_as_fallback else "__empty"]), name)
             bpy.context.collection.objects.link(ob)
             bpy.context.view_layer.objects.active = ob
+
+            if light_index != -1:
+                l = create_light(lights[light_index], map_collection)
+                l.parent = ob
 
         if child_comps and len(child_comps) > 0:
             for i, child_comp in enumerate(child_comps):
@@ -98,6 +110,10 @@ def import_umap(processed_map_path: str,
             apply_ob_props(imported)
             imported.data.name = key
             bpy.ops.object.shade_smooth()
+
+            if light_index != -1:
+                l = create_light(lights[light_index], map_collection)
+                l.parent = imported
 
             for m_idx, (m_path, m_textures) in enumerate(mats.items()):
                 if m_textures:
@@ -262,7 +278,7 @@ def string_hash_code(s: str) -> int:
 
 if __name__ == "__main__":
     data_dir = r"C:\Users\satri\Documents\AppProjects\BlenderUmap\run"
-    
+
     reuse_maps = True
     reuse_meshes = True
     use_cube_as_fallback = True

@@ -1,11 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
-using BlenderUmap.Extensions;
+using BlenderUmap;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
@@ -17,18 +17,20 @@ using CUE4Parse.UE4.Objects.Core.Math;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
-using CUE4Parse.UE4.Versions;
 using CUE4Parse.Utils;
-using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Meshes;
+using CUE4Parse_Conversion.Meshes.glTF;
 using CUE4Parse_Conversion.Textures;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using SharpGLTF.Geometry;
+using SharpGLTF.Geometry.VertexTypes;
+using SharpGLTF.Scenes;
+using SharpGLTF.Transforms;
 using SkiaSharp;
-using static CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat;
 
-namespace BlenderUmap {
+namespace GltfExporter {
     public static class Program {
         public static Config config;
         public static MyFileProvider provider;
@@ -37,13 +39,11 @@ namespace BlenderUmap {
         public static void Main(string[] args) {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
-                .WriteTo.File(Path.Combine("Logs", $"BlenderUmap-{DateTime.Now:yyyy-MM-dd}.log"))
                 .WriteTo.Console()
                 .CreateLogger();
-#if !DEBUG
-        try {
-#endif
-            var configFile = new FileInfo("config.json");
+
+            // try {
+                var configFile = new FileInfo("config.json");
                 if (!configFile.Exists) {
                     Log.Error("config.json not found");
                     return;
@@ -65,7 +65,7 @@ namespace BlenderUmap {
                 }
 
                 provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
-                provider.LoadVirtualPaths();
+                provider.LoadVirtualPaths(provider.Versions.Ver);
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
                     var usmap = new FileUsmapTypeMappingsProvider(newestUsmap.FullName);
@@ -73,9 +73,15 @@ namespace BlenderUmap {
                     provider.MappingsContainer = usmap;
                     Log.Information("Loaded mappings from {0}", newestUsmap.FullName);
                 }
+                else {
+                    provider.LoadMappings();
+                }
+                var sceneBuilder = new SceneBuilder();
+                var pkg = ExportAndProduceProcessed(config.ExportPackage, sceneBuilder);
+                if (pkg == null) return;
 
-                var pkg = ExportAndProduceProcessed(config.ExportPackage);
-                if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
+                var model = sceneBuilder.ToGltf2();
+                model.SaveGLB(pkg.Name.SubstringAfterLast("/")+ ".glb");
 
                 while (ThreadPool.PendingWorkItemCount != 0) { }
                 var file = new FileInfo("processed.json");
@@ -86,18 +92,15 @@ namespace BlenderUmap {
                 }
 
                 Log.Information("All done in {0:F1} sec. In the Python script, replace the line with data_dir with this line below:\n\ndata_dir = r\"{1}\"", (DateTimeOffset.Now.ToUnixTimeMilliseconds() - start) / 1000.0F, Directory.GetCurrentDirectory());
-            }
-#if !DEBUG
-        catch (Exception e) {
-                if (e is MainException) {
-                    Log.Information(e.Message);
-                } else {
-                    Log.Error(e, "An unexpected error has occurred, please report");
-                }
-                Environment.Exit(1);
-            }
+            // } catch (Exception e) {
+            //     if (e is MainException) {
+            //         Log.Information(e.Message);
+            //     } else {
+            //         Log.Error(e, "An unexpected error has occurred, please report");
+            //     }
+            //     Environment.Exit(1);
+            // }
         }
-#endif
 
         public static FileInfo GetNewestUsmap(DirectoryInfo directory) {
             FileInfo chosenFile = null;
@@ -112,48 +115,20 @@ namespace BlenderUmap {
             return chosenFile;
         }
 
-        public static bool CheckIfHasLights(IPackage actorPackage, out UObject lightcomp) {
-            lightcomp = new UObject();
-            if (actorPackage == null) return false;
-            foreach (var export in actorPackage.GetExports()) {
-                switch (export.ExportType) {
-                    case "SpotLightComponent": {
-                        lightcomp = export;
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-        
-        public static IPackage ExportAndProduceProcessed(string path) {
-            UObject obj = null;
-            if (path.EndsWith(".replay")) {
-                return ReplayExporter.ExportAndProduceProcessed(path, provider);
-            }
-            if (provider.TryLoadPackage(path, out var pkg)) { // multiple exports with package name
-                if (pkg is Package notioPackage) {
-                    foreach (var export in notioPackage.ExportMap) {
-                        if (export.ClassName == "World"){
-                            obj = export.ExportObject.Value;
-                        }
-                    }
-                }
+        public static IPackage ExportAndProduceProcessed(string path, SceneBuilder sceneBuilder) {
+            if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
+                path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
+
+            if (!provider.TryLoadObject(path, out var obj)) {
+                Log.Warning("Object {0} not found", path);
+                return null;
             }
 
-            if (obj == null) {
-                if (path.EndsWith(".umap", StringComparison.OrdinalIgnoreCase))
-                    path = $"{path.SubstringBeforeLast(".")}.{path.SubstringAfterLast("/").SubstringBeforeLast(".")}";
-
-                if (!provider.TryLoadObject(path, out obj)) {
-                    Log.Warning("Object {0} not found", path);
-                    return null;
-                }
-            }
-
-            if (obj.ExportType == "FortPlaysetItemDefinition") {
-                return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj, provider);
-            }
+            // if (obj.ExportType == "FortPlaysetItemDefinition") {
+            //     // PlaysetRecordCollectionTest.ExportAndProduceProcessed(obj);
+            //     FortPlaysetItemDefinition.ExportAndProduceProcessed(obj);
+            //     return obj.Owner;
+            // }
 
             if (obj is not UWorld world) {
                 Log.Information("{0} is not a World, won't try to export", obj.GetPathName());
@@ -162,7 +137,9 @@ namespace BlenderUmap {
 
             var persistentLevel = world.PersistentLevel.Load<ULevel>();
             var comps = new JArray();
-            var lights = new List<LightInfo2>();
+
+            var glMeshBuilders = new ConcurrentStack<GlMeshBuilder>(); 
+            
             for (var index = 0; index < persistentLevel.Actors.Length; index++) {
                 var actorLazy = persistentLevel.Actors[index];
                 if (actorLazy == null || actorLazy.IsNull) continue;
@@ -173,28 +150,6 @@ namespace BlenderUmap {
                 var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
                 if (staticMeshCompLazy.IsNull) continue;
                 var staticMeshComp = staticMeshCompLazy?.Load();
-
-                // if (actor.TryGetValue(out FStructFallback[] lightDataArray, "TimeOfDayControlledLightDataArray") && actor.TryGetValue(out FStructFallback[] lightColorInfo, "FourLayerColorInfo")) {
-                //     
-                //     for (var i = 0; i < lightDataArray.Length; i++) {
-                //         var light = lightDataArray[i];
-                //         var color = lightColorInfo[i];
-                //
-                //         var light_comp = light.Get<UObject>("LightComponent");
-                //         var pos = light.Get<FVector>("Position");
-                //         var rot = light_comp.GetOrDefault<UObject>("AttachParent")
-                //             .GetOrDefault<FRotator>("RelativeRotation");
-                //         var intensity = light.Get<float>("InitialIntensity");
-                //
-                //         var emissive_map = (FLinearColor)color.GetOrDefault<UScriptMap>("EmissiveColors").Properties.Values.ToList()[0].GetValue(typeof(FLinearColor))!;
-                //         
-                //         var lightinfo = new LightInfo() {
-                //             Color = emissive_map, Intensity = intensity, Location = pos, Rotation = rot,
-                //             Type = light_comp.Name
-                //         };
-                //         lights.Add(lightinfo);
-                //     }
-                // }
 
                 // identifiers
                 var comp = new JArray();
@@ -223,9 +178,8 @@ namespace BlenderUmap {
                 var matsObj = new JObject(); // matpath: [4x[str]]
                 var textureDataArr = new JArray();
                 var materials = new List<Mat>();
-                ExportMesh(mesh, materials);
 
-                if (config.bReadMaterials /*&& actor is BuildingSMActor*/) {
+                /*if (config.bReadMaterials /*&& actor is BuildingSMActor#1#) {
                     var material = actor.GetOrDefault<FPackageIndex>("BaseMaterial"); // /Script/FortniteGame.BuildingSMActor:BaseMaterial
                     var overrideMaterials = staticMeshComp.GetOrDefault<List<FPackageIndex>>("OverrideMaterials"); // /Script/Engine.MeshComponent:OverrideMaterials
 
@@ -239,7 +193,7 @@ namespace BlenderUmap {
                             AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
                             textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
-                            if (overrideMaterial is {IsNull: false}) {
+                            if (overrideMaterial != null) {
                                 material = overrideMaterial;
                             }
                         } else {
@@ -249,15 +203,14 @@ namespace BlenderUmap {
 
                     for (int i = 0; i < materials.Count; i++) {
                         var mat = materials[i];
-                        if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
-                            // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
-                            mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
+                        if (material != null) {
+                            mat.Material = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] != null ? overrideMaterials[i] : material;
                         }
 
                         mat.PopulateTextures();
                         mat.AddToObj(matsObj);
                     }
-                }
+                }*/
 
                 // region additional worlds
                 var children = new JArray();
@@ -266,43 +219,42 @@ namespace BlenderUmap {
                 if (config.bExportBuildingFoundations && additionalWorlds != null) {
                     foreach (var additionalWorld in additionalWorlds) {
                         var text = additionalWorld.AssetPathName.Text;
-                        var childPackage = ExportAndProduceProcessed(text);
+                        var childPackage = ExportAndProduceProcessed(text, sceneBuilder);
                         children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
                     }
                 }
                 // endregion
 
-                var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
-                var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation");
-                var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
-                comp.Add(PackageIndexToDirPath(mesh));
+                comp.Add(PackageIndexToDirPath(mesh.ResolvedObject));
                 comp.Add(matsObj);
                 comp.Add(textureDataArr);
-                comp.Add(Vector(loc)); // /Script/Engine.SceneComponent:RelativeLocation
-                comp.Add(Rotator(rot)); // /Script/Engine.SceneComponent:RelativeRotation
-                comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
+                comp.Add(Vector(staticMeshComp.GetOrDefault<FVector>("RelativeLocation"))); // /Script/Engine.SceneComponent:RelativeLocation
+                comp.Add(Rotator(staticMeshComp.GetOrDefault<FRotator>("RelativeRotation"))); // /Script/Engine.SceneComponent:RelativeRotation
+                comp.Add(Vector(staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector))); // /Script/Engine.SceneComponent:RelativeScale3D
                 comp.Add(children);
+                var loc = Gltf.SwapYZ(staticMeshComp.GetOrDefault<FVector>("RelativeLocation"));
+                loc.X = (float) (loc.X * 0.01);
+                loc.Y = (float) (loc.Y * 0.01);
+                loc.Z = (float) (loc.Z * 0.01);
 
-                int LightIndex = -1;
-                if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
-                    var infor = new LightInfo2() {
-#if DEBUG
-                        Location = loc, Rotation = rot,
-#endif
-                        Props = lightinfo
-                    };
-#if DEBUG
-                    // infor.Location = infor.Location +  lightinfo.GetOrDefault<FVector>("RelativeLocation");
-                    // infor.Rotation = (infor.Rotation + lightinfo.GetOrDefault<FRotator>("RelativeRotation")).GetNormalized();
-                    infor.Rotation = (new FRotator(-90.0f, 0f, 0.0f).Quaternion() *
-                                      lightinfo.GetOrDefault<FRotator>("RelativeRotation").Quaternion()).Rotator();
-#endif
-                    lights.Add(infor);
-                    LightIndex = lights.Count - 1;
+                
+                var rrot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation");
+                if (!staticMeshComp.TryGetValue(out FRotator rawrot, "RelativeRotation")) {
+                    System.Diagnostics.Debugger.Break();
                 }
-                comp.Add(LightIndex);
+                // rotator.Pitch, rotator.Yaw, rotator.Roll
+                var rot = SwapYZ(rrot.Quaternion()).ToQuaternion();
+                rot.W = -rot.W;
+                var scale = Gltf.SwapYZ(staticMeshComp.GetOrDefault("RelativeScale3D", FVector.OneVector));
+                
+                AddMesh(mesh, materials, glMeshBuilders, new AffineTransform(scale, rot, loc));
             }
 
+            foreach (var m in glMeshBuilders) {
+                Console.WriteLine(m);
+                sceneBuilder.AddRigidMesh(m.meshBuilder, m.transform);
+            }
+            glMeshBuilders.Clear();
             /*if (config.bExportBuildingFoundations) {
                 foreach (var streamingLevelLazy in world.StreamingLevels) {
                     UObject streamingLevel = streamingLevelLazy.Load();
@@ -330,102 +282,112 @@ namespace BlenderUmap {
                 }
             }*/
 
-            // var pkg = world.Owner;
-            string pkgName = provider.CompactFilePath(obj.Owner.Name).SubstringAfter("/");
+            var pkg = world.Owner;
+            string pkgName = provider.CompactFilePath(pkg.Name).SubstringAfter("/");
             var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
             file.Directory.Create();
             Log.Information("Writing to {0}", file.FullName);
-            
+
             using var writer = file.CreateText();
             new JsonSerializer().Serialize(writer, comps);
-            
-            var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
-            file2.Directory.Create();
-            
-            using var writer2 = file2.CreateText();
-#if DEBUG            
-            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer2, lights);
-#else
-            new JsonSerializer().Serialize(writer2, lights);
-#endif
 
-            return obj.Owner;
+            return pkg;
+        }
+
+        public static FQuat SwapYZ(FQuat quat) {
+            return new(quat.X, quat.Z, quat.Y, quat.W);
         }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
             if (index != null) {
                 ExportTexture(index);
-                array.Add(PackageIndexToDirPath(index));
+                array.Add(PackageIndexToDirPath(index.ResolvedObject));
             } else {
                 array.Add(JValue.CreateNull());
             }
         }
 
         private static void ExportTexture(FPackageIndex index) {
-            try {
-                var obj = index.Load();
-                if (obj is not UTexture2D texture) {
-                    return;
-                }
+            // try {
+            //     var obj = index.Load();
+            //     if (obj is not UTexture2D texture) {
+            //         return;
+            //     }
+            //
+            //     // CUE4Parse only reads the first FTexturePlatformData and drops the rest
+            //     var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
+            //     char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
+            //     var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
+            //
+            //     if (output.Exists) {
+            //         Log.Debug("Texture already exists, skipping: {0}", output.FullName);
+            //     } else {
+            //         if (fourCC != null) {
+            //             throw new NotImplementedException("DDS export is not implemented");
+            //         }
+            //
+            //         ThreadPool.QueueUserWorkItem((x) => {
+            //             Log.Information("Saving texture to {0}", output.FullName);
+            //             using var image = texture.Decode(firstMip);
+            //             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            //             try {
+            //                 using var stream = output.OpenWrite();
+            //                 data.SaveTo(stream);
+            //             }
+            //             catch (IOException) { } // two threads trying to write same texture
+            //         });
+            //     }
+            // } catch (Exception e) {
+            //     Log.Warning(e, "Failed to save texture");
+            // }
+        }
+        
+        public struct GlMeshBuilder {
+            public MeshBuilder<VertexPositionNormalTangent, VertexColorXTextureX, VertexEmpty> meshBuilder;
+            public AffineTransform transform;
 
-                char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
-                var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
-
-                if (output.Exists) {
-                    Log.Debug("Texture already exists, skipping: {0}", output.FullName);
-                } else {
-                    if (fourCC != null) {
-                        throw new NotImplementedException("DDS export is not implemented");
-                    }
-
-                    ThreadPool.QueueUserWorkItem(_ => {
-                        Log.Information("Saving texture to {0}", output.FullName);
-                        // CUE4Parse only reads the first FTexturePlatformData and drops the rest
-                        var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
-                        using var image = texture.Decode(firstMip);
-                        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                        try {
-                            using var stream = output.OpenWrite();
-                            data.SaveTo(stream);
-                        }
-                        catch (IOException) { } // two threads trying to write same texture
-                    });
-                }
-            } catch (Exception e) {
-                Log.Warning(e, "Failed to save texture");
+            public override string ToString() {
+                return $"[{meshBuilder.Name}]:  Rot={transform.Rotation} Loc={transform.Translation} Scale={transform.Scale}";
             }
         }
-
-        public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
+        
+        public static void AddMesh(FPackageIndex mesh, List<Mat> materials, ConcurrentStack<GlMeshBuilder> builder, AffineTransform transform) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
-            var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
-            
-            if (!output.Exists) {
-                ThreadPool.QueueUserWorkItem(_ => {
-                    if (!output.Exists) {
-                        Log.Information("Saving mesh to {0}", output.FullName);
-                        var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
-                        if (exporter.MeshLods.Count == 0) {
-                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                            return;
-                        }
 
-                        try {
-                            var stream = output.OpenWrite();
-                            stream.Write(exporter.MeshLods.First().FileData);
-                            stream.Close();
-                        }
-                        catch (IOException) { } // two threads trying to write same mesh
-                    }
-                });
-            }
+             if (!meshExport.TryConvert(out var convertedMesh))
+                 return;
+             
+            // ThreadPool.QueueUserWorkItem((_) => {
+                var meshBuilder = new MeshBuilder<VertexPositionNormalTangent, VertexColorXTextureX, VertexEmpty>(meshExport.Name);
+
+                var lod = convertedMesh.LODs[0];
+                for (var i = 0; i < lod.Sections.Value.Length; i++)
+                {
+                    Gltf.ExportStaticMeshSections(i, lod, lod.Sections.Value[i], null, meshBuilder);
+                }
+
+                builder.Push(new GlMeshBuilder() { meshBuilder = meshBuilder, transform = transform });
+                // sceneBuilder.AddRigidMesh(meshBuilder, transform);
+            // });
+
+            // ThreadPool.QueueUserWorkItem((_) => {
+            //     try {
+            //         var exporter = new MeshExporter(meshExport, exportMaterials: false);
+            //         if (exporter.MeshLods.Count == 0) {
+            //             Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+            //             return;
+            //         }
+            //         File.WriteAllBytes(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"), exporter.MeshLods.First().FileData); 
+            //     }
+            //     catch (IOException) { } // two threads trying to write same mesh
+            // });
 
             if (config.bReadMaterials) {
-                var matObjs = meshExport.Materials;
-                if (matObjs != null) {
-                    foreach (var material in matObjs) {
-                        materials.Add(new Mat(material));
+                var staticMaterials = meshExport.StaticMaterials;
+                if (staticMaterials != null) {
+                    foreach (var staticMaterial in staticMaterials) {
+                        materials.Add(new Mat(staticMaterial.MaterialInterface));
                     }
                 }
             }
@@ -442,7 +404,7 @@ namespace BlenderUmap {
             }
 
             var outputDir = new FileInfo(pkgPath).Directory;
-            // string pkgName = pkgPath.SubstringAfterLast('/');
+            string pkgName = pkgPath.SubstringAfterLast('/');
 
             // what's this for?
             // if (exportObj.Name != pkgName) {
@@ -453,24 +415,13 @@ namespace BlenderUmap {
             return outputDir;
         }
 
-        public static string PackageIndexToDirPath(UObject obj) {
-            string pkgPath = provider.CompactFilePath(obj.Owner.Name);
-            pkgPath = pkgPath.SubstringBeforeLast('.');
-            var objectName = obj.Name;
-            return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
-        }
-
         public static string PackageIndexToDirPath(ResolvedObject obj) {
             if (obj == null) return null;
 
             string pkgPath = provider.CompactFilePath(obj.Package.Name);
             pkgPath = pkgPath.SubstringBeforeLast('.');
             var objectName = obj.Name.Text;
-            return String.Compare(pkgPath.SubstringAfterLast('/'), objectName, StringComparison.OrdinalIgnoreCase) == 0 ? pkgPath : pkgPath + '/' + objectName;
-        }
-
-        public static string PackageIndexToDirPath(FPackageIndex obj) {
-            return PackageIndexToDirPath(obj?.ResolvedObject);
+            return pkgPath.SubstringAfterLast('/') == objectName ? pkgPath : pkgPath + '/' + objectName;
         }
 
         public static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
@@ -478,11 +429,11 @@ namespace BlenderUmap {
         public static JArray Quat(FQuat quat) => new() {quat.X, quat.Y, quat.Z, quat.W};
 
         private static char[] GetDDSFourCC(UTexture2D texture) => (texture.Format switch {
-            PF_DXT1 => "DXT1",
-            PF_DXT3 => "DXT3",
-            PF_DXT5 => "DXT5",
-            PF_BC4 => "ATI1",
-            PF_BC5 => "ATI2",
+            EPixelFormat.PF_DXT1 => "DXT1",
+            EPixelFormat.PF_DXT3 => "DXT3",
+            EPixelFormat.PF_DXT5 => "DXT5",
+            EPixelFormat.PF_BC4 => "ATI1",
+            EPixelFormat.PF_BC5 => "ATI2",
             _ => null
         })?.ToCharArray();
 
@@ -506,10 +457,8 @@ namespace BlenderUmap {
         
         private static T GetAnyValueOrDefault<T>(this Dictionary<string, T> dict, string[] keys) {
             foreach (var key in keys) {
-                foreach (var kvp in dict) {
-                    if (kvp.Key.Equals(key))
-                        return kvp.Value;
-                }
+                if (dict.ContainsKey(key))
+                    return dict.GetValueOrDefault(key);
             }
             return default;
         }
@@ -527,46 +476,14 @@ namespace BlenderUmap {
             }
 
             private void PopulateTextures(UObject obj) {
-                if (obj is not UMaterialInterface material) {
+                if (obj is not UMaterialInstance material) {
                     return;
                 }
 
-                #region PossiblyOldFormat
-
-                foreach (var propertyTag in material.Properties) {
-                    if (propertyTag.Tag == null) return;
-
-                    var text = propertyTag.Tag.GetValue(typeof(FExpressionInput));
-                    if (text is FExpressionInput materialInput) {
-                        var expression = obj.Owner!.GetExportOrNull(materialInput.ExpressionName.ToString());
-                        if (expression != null && expression.TryGetValue(out FPackageIndex texture, "Texture")) {
-                            if (!_textureMap.ContainsKey(propertyTag.Name.ToString())) {
-                                _textureMap[propertyTag.Name.ToString()] = texture;
-                            }
-                        }
-                    }
-                }
-                
-                if (material.TryGetValue(out UObject[] exports, "Expressions")) {
-                    foreach (var export in exports) {
-                        if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
-                            if (export.TryGetValue(out FPackageIndex parameterValue, "Texture")) {
-                                if (!_textureMap.ContainsKey(name.Text)) {
-                                    _textureMap[name.Text] = parameterValue;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // for some materials we still don't have the textures
-                #endregion
-                
                 var textureParameterValues =
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
                     foreach (var textureParameterValue in textureParameterValues) {
-                        if (textureParameterValue.ParameterInfo == null) continue;
                         var name = textureParameterValue.ParameterInfo.Name;
                         if (!name.IsNone) {
                             var parameterValue = textureParameterValue.ParameterValue;
@@ -577,10 +494,8 @@ namespace BlenderUmap {
                     }
                 }
 
-                if (material is UMaterialInstance mi) {
-                    if (mi.Parent != null) {
-                        PopulateTextures(mi.Parent);
-                    }
+                if (material.Parent != null) {
+                    PopulateTextures(material.Parent);
                 }
             }
 
@@ -635,7 +550,7 @@ namespace BlenderUmap {
                     var subArray = new JArray();
                     if (!empty) {
                         foreach (var index in texture) {
-                            subArray.Add(PackageIndexToDirPath(index));
+                            subArray.Add(PackageIndexToDirPath(index.ResolvedObject));
                         }
                     }
 
@@ -646,87 +561,5 @@ namespace BlenderUmap {
                     obj.Add(PackageIndexToDirPath(Material), array);
             }
         }
-    }
-
-    [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
-    [SuppressMessage("ReSharper", "ConvertToConstant.Global")]
-    [SuppressMessage("ReSharper", "FieldCanBeMadeReadOnly.Global")]
-    public class Config {
-        public string PaksDirectory = "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Content\\Paks";
-        [JsonProperty("UEVersion")]
-        public EGame Game = EGame.GAME_UE4_LATEST;
-        public List<EncryptionKey> EncryptionKeys = new();
-        public bool bDumpAssets = false;
-        public int ObjectCacheSize = 100;
-        public bool bReadMaterials = true;
-        public bool bExportToDDSWhenPossible = true;
-        public bool bExportBuildingFoundations = true;
-        public string ExportPackage;
-        public TextureMapping Textures = new();
-    }
-
-    public class TextureMapping {
-        public TextureMap UV1 = new() {
-            Diffuse = new[] {"Trunk_BaseColor", "Diffuse", "DiffuseTexture", "Base_Color_Tex", "Tex_Color"},
-            Normal = new[] {"Trunk_Normal", "Normals", "Normal", "Base_Normal_Tex", "Tex_Normal"},
-            Specular = new[] {"Trunk_Specular", "SpecularMasks"},
-            Emission = new[] {"EmissiveTexture"},
-            MaskTexture = new[] {"MaskTexture"}
-        };
-        public TextureMap UV2 = new() {
-            Diffuse = new[] {"Diffuse_Texture_3"},
-            Normal = new[] {"Normals_Texture_3"},
-            Specular = new[] {"SpecularMasks_3"},
-            Emission = new[] {"EmissiveTexture_3"},
-            MaskTexture = new[] {"MaskTexture_3"}
-        };
-        public TextureMap UV3 = new() {
-            Diffuse = new[] {"Diffuse_Texture_4"},
-            Normal = new[] {"Normals_Texture_4"},
-            Specular = new[] {"SpecularMasks_4"},
-            Emission = new[] {"EmissiveTexture_4"},
-            MaskTexture = new[] {"MaskTexture_4"}
-            };
-        public TextureMap UV4 = new() {
-            Diffuse = new[] {"Diffuse_Texture_2"},
-            Normal = new[] {"Normals_Texture_2"},
-            Specular = new[] {"SpecularMasks_2"},
-            Emission = new[] {"EmissiveTexture_2"},
-            MaskTexture = new[] {"MaskTexture_2"}
-            };
-    }
-
-    public class TextureMap {
-        public string[] Diffuse;
-        public string[] Normal;
-        public string[] Specular;
-        public string[] Emission;
-        public string[] MaskTexture;
-    }
-    
-    public class LightInfo2 {
-#if DEBUG
-        public FVector Location;
-        public FRotator Rotation;
-#endif
-        public UObject Props;
-    }
-
-    // public class LightInfo {
-    //     public string Type;
-    //     public float Intensity;
-    //     public FVector Location;
-    //     public FRotator Rotation;
-    //     public FLinearColor Color;
-    //     public bool isCandelas = false;
-    // }
-    //
-    // public class SpotLightInfo : LightInfo {
-    //     public float OuterConeAngle = 90;
-    //     public float InnerConeAngle = 0;
-    // }
-
-    public class MainException : Exception {
-        public MainException(string message) : base(message) { }
     }
 }
