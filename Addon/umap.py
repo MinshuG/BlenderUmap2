@@ -46,6 +46,12 @@ def import_umap(processed_map_path: str,
         child_comps = comp[8]
         light_index = comp[9] if blights_exist else -1
 
+        # if light_index == -1:
+        #     continue
+
+        # if not name.startswith("CP_Wall_Light4_C"):
+        #     continue
+
         print("\nActor %d of %d: %s" % (comp_i + 1, len(comps), name))
 
         def apply_ob_props(ob: bpy.types.Object, new_name: str = name) -> bpy.types.Object:
@@ -62,8 +68,9 @@ def import_umap(processed_map_path: str,
             bpy.context.view_layer.objects.active = ob
 
             if light_index != -1:
-                l = create_light(lights[light_index], map_collection)
-                l.parent = ob
+                for light in lights[light_index]["Props"]:
+                    l = create_light(light, map_collection)
+                    l.parent = ob
 
         if child_comps and len(child_comps) > 0:
             for i, child_comp in enumerate(child_comps):
@@ -112,8 +119,9 @@ def import_umap(processed_map_path: str,
             bpy.ops.object.shade_smooth()
 
             if light_index != -1:
-                l = create_light(lights[light_index], map_collection)
-                l.parent = imported
+                for light in lights[light_index]["Props"]:
+                    l = create_light(light, map_collection)
+                    l.parent = imported
 
             for m_idx, (m_path, m_textures) in enumerate(mats.items()):
                 if m_textures:

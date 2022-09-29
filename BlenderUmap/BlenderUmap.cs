@@ -50,7 +50,7 @@ namespace BlenderUmap {
                 }
 
                 Log.Information("Reading config file {0}", configFile.FullName);
-
+                
                 using (var reader = configFile.OpenText()) {
                     config = new JsonSerializer().Deserialize<Config>(new JsonTextReader(reader));
                 }
@@ -63,7 +63,9 @@ namespace BlenderUmap {
                 if (string.IsNullOrEmpty(config.ExportPackage)) {
                     throw new MainException("Please specify ExportPackage.");
                 }
-
+                
+                ObjectTypeRegistry.RegisterEngine(typeof(SpotLightComponent).Assembly);
+                
                 provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
                 provider.LoadVirtualPaths();
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
@@ -112,20 +114,17 @@ namespace BlenderUmap {
             return chosenFile;
         }
 
-        public static bool CheckIfHasLights(IPackage actorPackage, out UObject lightcomp) {
-            lightcomp = new UObject();
+        public static bool CheckIfHasLights(IPackage actorPackage, out List<UObject> lightcomps) {
+            lightcomps = new List<UObject>();
             if (actorPackage == null) return false;
             foreach (var export in actorPackage.GetExports()) {
-                switch (export.ExportType) {
-                    case "SpotLightComponent": {
-                        lightcomp = export;
-                        return true;
-                    }
+                if (export is LightComponent) {
+                    lightcomps.Add(export);
                 }
             }
-            return false;
+            return lightcomps.Count > 0;
         }
-        
+
         public static IPackage ExportAndProduceProcessed(string path) {
             UObject obj = null;
             if (path.EndsWith(".replay")) {
@@ -273,7 +272,7 @@ namespace BlenderUmap {
                 // endregion
 
                 var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
-                var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation");
+                var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
                 var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
                 comp.Add(PackageIndexToDirPath(mesh));
                 comp.Add(matsObj);
@@ -286,17 +285,8 @@ namespace BlenderUmap {
                 int LightIndex = -1;
                 if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
                     var infor = new LightInfo2() {
-#if DEBUG
-                        Location = loc, Rotation = rot,
-#endif
-                        Props = lightinfo
+                        Props = lightinfo.ToArray()
                     };
-#if DEBUG
-                    // infor.Location = infor.Location +  lightinfo.GetOrDefault<FVector>("RelativeLocation");
-                    // infor.Rotation = (infor.Rotation + lightinfo.GetOrDefault<FRotator>("RelativeRotation")).GetNormalized();
-                    infor.Rotation = (new FRotator(-90.0f, 0f, 0.0f).Quaternion() *
-                                      lightinfo.GetOrDefault<FRotator>("RelativeRotation").Quaternion()).Rotator();
-#endif
                     lights.Add(infor);
                     LightIndex = lights.Count - 1;
                 }
@@ -705,11 +695,7 @@ namespace BlenderUmap {
     }
     
     public class LightInfo2 {
-#if DEBUG
-        public FVector Location;
-        public FRotator Rotation;
-#endif
-        public UObject Props;
+        public UObject[] Props;
     }
 
     // public class LightInfo {

@@ -1,13 +1,13 @@
 import bpy
-from mathutils import Vector
+from mathutils import Vector, Quaternion
 from math import cos, pi, radians, degrees
 
 def get_rgb_255(pv: dict) -> tuple:
             return (
-                pv["R"] / 255,
-                pv["G"] / 255,
-                pv["B"] / 255,
-                pv["A"] / 255
+                srgb2lin(pv["R"] / 255),
+                srgb2lin(pv["G"] / 255),
+                srgb2lin(pv["B"] / 255),
+                srgb2lin(pv["A"] / 255)
             )
 
 def get_light_type(object):
@@ -49,30 +49,13 @@ def set_properties(byo: bpy.types.Object, object: dict, is_instanced: bool = Fal
                 object["RelativeLocation"]["Z"] * 0.01
             ]
         if "RelativeRotation" in object:
-            x = object["RelativeRotation"]["Roll"]-90 if object["RelativeRotation"]["Roll"] != 0.0 and object["RelativeRotation"]["Roll"] > -10 else object["RelativeRotation"]["Roll"]
-            if object["RelativeRotation"]["Roll"] > 180.0: x += 90
-            byo.rotation_mode = 'XYZ'
-            byo.rotation_euler = [
-                # rotator.Roll2, -rotator.Pitch0, -rotator.Yaw1
-                radians(x),
+            # rotator.Roll2, -rotator.Pitch0, -rotator.Yaw1
+            byo.rotation_mode = 'AXIS_ANGLE' # QUATERNION
+            byo.rotation_euler = Vector([
+                radians(object["RelativeRotation"]["Roll"]),
                 radians(-object["RelativeRotation"]["Pitch"]),
                 radians(-object["RelativeRotation"]["Yaw"])
-            ]
-
-            # original
-            # byo.rotation_mode = 'XYZ'
-            # byo.rotation_euler = [
-            #     # rotator.Roll2, -rotator.Pitch0, -rotator.Yaw1
-            #     radians(object["RelativeRotation"]["Roll"]),
-            #     radians(-object["RelativeRotation"]["Pitch"]),
-            #     radians(-object["RelativeRotation"]["Yaw"])
-            # ]
-
-            # y = object["RelativeRotation"]["Pitch"]
-            # z = object["RelativeRotation"]["Yaw"]
-            # print(f"X: {x} Y: {y} Z: {z}")
-            # print(f"X: {degrees(byo.rotation_euler[0])} Y: {degrees(byo.rotation_euler[1])} Z: {degrees(byo.rotation_euler[2])}")
-            # print("--------------------------------")
+                ])
 
         if "RelativeScale3D" in object:
             byo.scale = [
@@ -83,10 +66,8 @@ def set_properties(byo: bpy.types.Object, object: dict, is_instanced: bool = Fal
 
 
 def create_light(light, lights_collection):
-    object_data = light["Props"]
-    # light['Props']['Properties']['RelativeLocation'] = light['Location']
-    # light['Props']['Properties']['RelativeRotation'] = light['Rotation']
-
+    object_data = light
+    object_data['Properties']['RelativeRotation'] = object_data['RelativeRotation']
 
     # Set variables
     light_type = get_light_type(object_data)
@@ -105,17 +86,15 @@ def create_light(light, lights_collection):
 
     light_data = bpy.data.lights.new(name=light_name, type=light_type)
     light_object = bpy.data.objects.new(name=light_name, object_data=light_data)
-    light_object.delta_rotation_euler = (radians(0.0), radians(-90), 0.0)  # still broken??
     lights_collection.objects.link(light_object)
 
     for prop_name, prop_value in light_props.items():
-        # OtherTypes.append(prop_name)
         if "Intensity" == prop_name:
             if light_type == "POINT":
                 if light_unit == "CANDELAS":
                     light_object.data.energy = (light_intensity*4*pi)/683
                 else:
-                    light_object.data.energy = (light_intensity*49.7)/683
+                    light_object.data.energy = ((99.5*(1-cos(cone_angle/2)))*light_intensity)
             if light_type == "AREA":
                 if light_unit == "CANDELAS":
                     light_object.data.energy = (light_intensity*2*pi)/683
@@ -130,15 +109,18 @@ def create_light(light, lights_collection):
         if "LightColor" == prop_name:
             light_object.data.color = get_rgb_255(prop_value)[:-1]
         if "SourceRadius" == prop_name:
-            if light_type == "SPOT":
-                light_object.data.shadow_soft_size = prop_value * 0.01
-            else:
-                light_object.data.shadow_soft_size = prop_value * 0.1
+            # if light_type == "SPOT":
+            #     light_object.data.shadow_soft_size = prop_value / 0.01
+            # else:
+            light_object.data.shadow_soft_size = prop_value * 0.01
         if "CastShadows" == prop_name:
             light_object.data.use_shadow = prop_value
             if hasattr(light_object.data, "cycles"):
                 light_object.data.cycles.cast_shadow = prop_value
 
+        if "AttenuationRadius" == prop_name:
+            light_object.data.use_custom_distance = True
+            light_object.data.cutoff_distance = prop_value * 0.01
 
         if light_type == "AREA":
             light_object.data.shape = 'RECTANGLE'
@@ -153,8 +135,13 @@ def create_light(light, lights_collection):
             if "OuterConeAngle" == prop_name:
                 light_object.data.spot_size = radians(prop_value)
 
-
-
     set_properties(byo=light_object, object=light_props)
 
     return light_object
+
+def srgb2lin(s):
+    if s <= 0.0404482362771082:
+        lin = s / 12.92
+    else:
+        lin = pow(((s + 0.055) / 1.055), 2.4)
+    return lin

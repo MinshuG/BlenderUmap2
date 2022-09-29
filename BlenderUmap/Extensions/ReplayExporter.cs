@@ -51,7 +51,7 @@ public static class ReplayExporter
             }
             catch (Exception e) {
                 //Console.WriteLine(e);
-                throw new ParserException("corrupted or unsupported replay file");
+                throw new ParserException("corrupted or unsupported replay file", e);
             }
 
             var lights = new List<LightInfo2>();
@@ -153,15 +153,8 @@ public static class ReplayExporter
                 int LightIndex = -1;
                 if (Program.CheckIfHasLights(ac.Owner, out var lightinfo)) {
                     var infor = new LightInfo2() {
-#if DEBUG
-                        Location = ToFVector(actor.Location), Rotation = ToRotator(actor.Rotation),
-#endif
-                        Props = lightinfo
+                        Props = lightinfo.ToArray()
                     };
-#if DEBUG
-                    infor.Location = infor.Location;
-                    infor.Rotation = (infor.Rotation + lightinfo.GetOrDefault<FRotator>("RelativeRotation")).GetNormalized();
-#endif
                     // X               Y                 Z
                     // rotator.Roll2, -rotator.Pitch0, -rotator.Yaw1
                     lights.Add(infor);
@@ -196,7 +189,7 @@ public static class ReplayExporter
     public static JArray Quat(Unreal.Core.Models.FQuat quat) => new() {quat.X, quat.Y, quat.Z, quat.W};
 
     public static FVector ToFVector(Unreal.Core.Models.FVector vector) {
-        return new FVector(vector.X, vector.Y, vector.Z);
+        return new FVector((float)vector.X, (float)vector.Y, (float)vector.Z);
     }
 
     public static FRotator ToRotator(Unreal.Core.Models.FRotator vector) {
