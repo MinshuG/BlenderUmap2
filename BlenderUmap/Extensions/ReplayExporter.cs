@@ -60,6 +60,10 @@ public static class ReplayExporter
             var actors = rr.Builder._actor_actors.Values.ToArray();
             for (var index = 0; index < actors.Length; index++)
             {
+                if (index % 100 == 0) { // every 100th actor
+                    GC.Collect();
+                }
+
                 // var channel = channels[index];
                 // if (channel == null) continue;
                 // if (channel.Actor == null || (channel.Actor.GetObject() == null || !provider.TryLoadObject(channel.Actor.GetObject(), out var record) ))

@@ -3,12 +3,12 @@ from mathutils import Vector, Quaternion
 from math import cos, pi, radians, degrees
 
 def get_rgb_255(pv: dict) -> tuple:
-            return (
-                srgb2lin(pv["R"] / 255),
-                srgb2lin(pv["G"] / 255),
-                srgb2lin(pv["B"] / 255),
-                srgb2lin(pv["A"] / 255)
-            )
+    return (
+        srgb2lin(pv["R"] / 255),
+        srgb2lin(pv["G"] / 255),
+        srgb2lin(pv["B"] / 255),
+        srgb2lin(pv["A"] / 255)
+    )
 
 def get_light_type(object):
     if "Point" in object["Type"]:

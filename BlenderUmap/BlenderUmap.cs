@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using BlenderUmap;
 using BlenderUmap.Extensions;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
@@ -28,6 +29,7 @@ using Serilog;
 using SkiaSharp;
 using static CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat;
 
+// ReSharper disable PositionalPropertyUsedProblem
 namespace BlenderUmap {
     public static class Program {
         public static Config config;
@@ -50,7 +52,7 @@ namespace BlenderUmap {
                 }
 
                 Log.Information("Reading config file {0}", configFile.FullName);
-                
+
                 using (var reader = configFile.OpenText()) {
                     config = new JsonSerializer().Deserialize<Config>(new JsonTextReader(reader));
                 }
@@ -63,9 +65,9 @@ namespace BlenderUmap {
                 if (string.IsNullOrEmpty(config.ExportPackage)) {
                     throw new MainException("Please specify ExportPackage.");
                 }
-                
+
                 ObjectTypeRegistry.RegisterEngine(typeof(SpotLightComponent).Assembly);
-                
+
                 provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
                 provider.LoadVirtualPaths();
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
@@ -130,10 +132,11 @@ namespace BlenderUmap {
             if (path.EndsWith(".replay")) {
                 return ReplayExporter.ExportAndProduceProcessed(path, provider);
             }
+
             if (provider.TryLoadPackage(path, out var pkg)) { // multiple exports with package name
                 if (pkg is Package notioPackage) {
                     foreach (var export in notioPackage.ExportMap) {
-                        if (export.ClassName == "World"){
+                        if (export.ClassName == "World") {
                             obj = export.ExportObject.Value;
                         }
                     }
@@ -167,33 +170,41 @@ namespace BlenderUmap {
                 if (actorLazy == null || actorLazy.IsNull) continue;
                 var actor = actorLazy.Load();
                 if (actor.ExportType == "LODActor") continue;
-                Log.Information("Loading {0}: {1}/{2} {3}",world.Name, index,persistentLevel.Actors.Length, actorLazy);
+                Log.Information("Loading {0}: {1}/{2} {3}", world.Name, index, persistentLevel.Actors.Length,
+                    actorLazy);
+                ProcessActor(actor, lights, comps);
 
+                if (index % 100 == 0) { // every 100th actor
+                    GC.Collect();
+                }
+            }
+
+            // var pkg = world.Owner;
+            string pkgName = provider.CompactFilePath(obj.Owner.Name).SubstringAfter("/");
+            var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
+            file.Directory.Create();
+            Log.Information("Writing to {0}", file.FullName);
+
+            using var writer = file.CreateText();
+            new JsonSerializer().Serialize(writer, comps);
+
+            var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
+            file2.Directory.Create();
+
+            using var writer2 = file2.CreateText();
+#if DEBUG
+            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer2, lights);
+#else
+            new JsonSerializer().Serialize(writer2, lights);
+#endif
+
+            return obj.Owner;
+        }
+
+        public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps) {
                 var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
-                if (staticMeshCompLazy.IsNull) continue;
+                if (staticMeshCompLazy.IsNull) return;
                 var staticMeshComp = staticMeshCompLazy?.Load();
-
-                // if (actor.TryGetValue(out FStructFallback[] lightDataArray, "TimeOfDayControlledLightDataArray") && actor.TryGetValue(out FStructFallback[] lightColorInfo, "FourLayerColorInfo")) {
-                //     
-                //     for (var i = 0; i < lightDataArray.Length; i++) {
-                //         var light = lightDataArray[i];
-                //         var color = lightColorInfo[i];
-                //
-                //         var light_comp = light.Get<UObject>("LightComponent");
-                //         var pos = light.Get<FVector>("Position");
-                //         var rot = light_comp.GetOrDefault<UObject>("AttachParent")
-                //             .GetOrDefault<FRotator>("RelativeRotation");
-                //         var intensity = light.Get<float>("InitialIntensity");
-                //
-                //         var emissive_map = (FLinearColor)color.GetOrDefault<UScriptMap>("EmissiveColors").Properties.Values.ToList()[0].GetValue(typeof(FLinearColor))!;
-                //         
-                //         var lightinfo = new LightInfo() {
-                //             Color = emissive_map, Intensity = intensity, Location = pos, Rotation = rot,
-                //             Type = light_comp.Name
-                //         };
-                //         lights.Add(lightinfo);
-                //     }
-                // }
 
                 // identifiers
                 var comp = new JArray();
@@ -252,7 +263,6 @@ namespace BlenderUmap {
                             // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
                             mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
                         }
-
                         mat.PopulateTextures();
                         mat.AddToObj(matsObj);
                     }
@@ -265,6 +275,7 @@ namespace BlenderUmap {
                 if (config.bExportBuildingFoundations && additionalWorlds != null) {
                     foreach (var additionalWorld in additionalWorlds) {
                         var text = additionalWorld.AssetPathName.Text;
+                        GC.Collect();
                         var childPackage = ExportAndProduceProcessed(text);
                         children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
                     }
@@ -291,7 +302,7 @@ namespace BlenderUmap {
                     LightIndex = lights.Count - 1;
                 }
                 comp.Add(LightIndex);
-            }
+
 
             /*if (config.bExportBuildingFoundations) {
                 foreach (var streamingLevelLazy in world.StreamingLevels) {
@@ -319,28 +330,7 @@ namespace BlenderUmap {
                     comps.Add(comp);
                 }
             }*/
-
-            // var pkg = world.Owner;
-            string pkgName = provider.CompactFilePath(obj.Owner.Name).SubstringAfter("/");
-            var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
-            file.Directory.Create();
-            Log.Information("Writing to {0}", file.FullName);
-            
-            using var writer = file.CreateText();
-            new JsonSerializer().Serialize(writer, comps);
-            
-            var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
-            file2.Directory.Create();
-            
-            using var writer2 = file2.CreateText();
-#if DEBUG            
-            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer2, lights);
-#else
-            new JsonSerializer().Serialize(writer2, lights);
-#endif
-
-            return obj.Owner;
-        }
+    }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
             if (index != null) {
@@ -373,6 +363,7 @@ namespace BlenderUmap {
                         // CUE4Parse only reads the first FTexturePlatformData and drops the rest
                         var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                         using var image = texture.Decode(firstMip);
+
                         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
                         try {
                             using var stream = output.OpenWrite();
@@ -390,7 +381,7 @@ namespace BlenderUmap {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
             var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
-            
+
             if (!output.Exists) {
                 ThreadPool.QueueUserWorkItem(_ => {
                     if (!output.Exists) {
@@ -493,7 +484,7 @@ namespace BlenderUmap {
 
             return array;
         }
-        
+
         private static T GetAnyValueOrDefault<T>(this Dictionary<string, T> dict, string[] keys) {
             foreach (var key in keys) {
                 foreach (var kvp in dict) {
@@ -536,7 +527,7 @@ namespace BlenderUmap {
                         }
                     }
                 }
-                
+
                 if (material.TryGetValue(out UObject[] exports, "Expressions")) {
                     foreach (var export in exports) {
                         if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
@@ -551,7 +542,7 @@ namespace BlenderUmap {
 
                 // for some materials we still don't have the textures
                 #endregion
-                
+
                 var textureParameterValues =
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
@@ -693,7 +684,7 @@ namespace BlenderUmap {
         public string[] Emission;
         public string[] MaskTexture;
     }
-    
+
     public class LightInfo2 {
         public UObject[] Props;
     }

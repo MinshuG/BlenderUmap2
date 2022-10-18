@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using CUE4Parse.FN.Assets.Exports;
+using CUE4Parse.GameTypes.FN.Assets.Exports;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
 using CUE4Parse.UE4.Assets.Objects;
@@ -22,6 +22,10 @@ namespace BlenderUmap.Extensions {
 
             var records = recordLazy.Load()!.GetOrDefault<FStructFallback[]>("Items");
             for (var index = 0; index < records.Length; index++) {
+                if (index % 100 == 0) { // every 100th actor
+                    GC.Collect();
+                }
+                
                 var record = records[index];
                 var actorRecord = record.GetOrDefault<UObject>("LevelSaveRecord").GetOrDefault<ULevelSaveRecord>("ActorSaveRecord");
 
@@ -85,7 +89,6 @@ namespace BlenderUmap.Extensions {
                             var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] != null ? overrideMaterials[i] : material;
                             mat.Material = matIndex?.ResolvedObject;
                         }
-
                         mat.PopulateTextures();
                         mat.AddToObj(matsObj);
                     }
