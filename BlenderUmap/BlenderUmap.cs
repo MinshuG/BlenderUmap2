@@ -130,6 +130,7 @@ namespace BlenderUmap {
         public static IPackage ExportAndProduceProcessed(string path) {
             UObject obj = null;
             if (path.EndsWith(".replay")) {
+                // throw new NotSupportedException("replays are not supported by this version of BlenderUmap.");
                 return ReplayExporter.ExportAndProduceProcessed(path, provider);
             }
 
@@ -222,7 +223,7 @@ namespace BlenderUmap {
 
                     if (actorBlueprint is UBlueprintGeneratedClass) {
                         foreach (var actorExp in actorBlueprint.Owner.GetExports()) {
-                            if ((mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                            if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
                                 break;
                             }
                         }
