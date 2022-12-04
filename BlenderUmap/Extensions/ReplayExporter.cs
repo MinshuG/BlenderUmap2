@@ -87,7 +87,7 @@ public static class ReplayExporter
                     mesh = actorBlueprint?.GetOrDefault<FPackageIndex>("StaticMesh");
                     staticMeshComp = actorBlueprint?.GetOrDefault<UObject>("StaticMeshComponent");
 
-                    if (mesh == null && staticMeshComp == null) {
+                    if (staticMeshComp != null && !staticMeshComp.TryGetValue(out mesh, "StaticMesh") && mesh == null) {
                         foreach (var export in actorBlueprint.Owner.GetExports()) {
                             if (export.ExportType == "StaticMeshComponent") {
                                 staticMeshComp = export;
