@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using BlenderUmap;
 using BlenderUmap.Extensions;
 using CUE4Parse.MappingsProvider;
@@ -202,135 +204,201 @@ namespace BlenderUmap {
             return obj.Owner;
         }
 
+        public static void ProcessStreamingGrid(FStructFallback grid, JArray children) {
+            var tasks = new List<Task>();
+            var bagged = new ConcurrentBag<string>();
+            if (grid.TryGetValue(out FStructFallback[] gridLevels, "GridLevels")) {
+                foreach (var level in gridLevels) {
+                    if (level.TryGetValue<FStructFallback[]>(out var levelCells, "LayerCells")) {
+                        foreach (var levelCell in levelCells) {
+                            if (levelCell.TryGetValue<UObject[]>(out var gridCells, "GridCells")) {
+                                foreach (var gridCell in gridCells) {
+                                    if (gridCell.TryGetValue<UObject>(out var levelStreaming, "LevelStreaming") && levelStreaming.TryGetValue(out FSoftObjectPath worldAsset, "WorldAsset")) {
+                                        var text = worldAsset.ToString();
+                                        if (text.SubstringAfterLast("/").StartsWith("HLOD"))
+                                            continue;
+                                        // GC.Collect();
+                                        var childPackage = ExportAndProduceProcessed(text);
+                                        children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
+                                        // tasks.Add(Task.Run(() => {
+                                        //     var childPackage = ExportAndProduceProcessed(text);
+                                        //     // bagged.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
+                                        // }));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Task.WaitAll(tasks.ToArray());
+            // foreach (var child in bagged) {
+            //     children.Add(child != null ? provider.CompactFilePath(child) : null);
+            // }
+        }
+
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps) {
-                var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
-                if (staticMeshCompLazy.IsNull) return;
-                var staticMeshComp = staticMeshCompLazy?.Load();
+            if (actor.TryGetValue(out UObject partition, "WorldPartition") && partition.TryGetValue(out UObject runtineHash, "RuntimeHash") && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
+                FStructFallback grid = null;
+                foreach (var t in streamingGrids) {
+                    if (t.TryGetValue(out FName name, "GridName")) {
+                        if (!name.ToString().StartsWith("HLOD")) {
+                            grid = t;
+                            break;
+                        }
+                    }
+                }
+                if (grid == null) return;
+
+                var childrenLevel = new JArray();
+                ProcessStreamingGrid(grid, childrenLevel);
+                if (childrenLevel.Count == 0) return;
 
                 // identifiers
-                var comp = new JArray();
-                comps.Add(comp);
-                comp.Add(actor.TryGetValue<FGuid>(out var guid, "MyGuid") // /Script/FortniteGame.BuildingActor:MyGuid
-                    ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant()
-                    : Guid.NewGuid().ToString().Replace("-", ""));
-                comp.Add(actor.Name);
+                var streamComp = new JArray();
+                comps.Add(streamComp);
+                streamComp.Add(Guid.NewGuid().ToString().Replace("-", ""));
+                streamComp.Add(actor.Name);
+                streamComp.Add(null);
+                streamComp.Add(null);
+                streamComp.Add(null);
+                streamComp.Add(Vector(grid.GetOrDefault<FVector>("Origin", FVector.ZeroVector)));
+                streamComp.Add(Rotator(new FRotator()));
+                streamComp.Add(Vector(FVector.OneVector));
+                streamComp.Add(childrenLevel);
+                streamComp.Add(-1); // LightIndex
+                return;
+            }
 
-                // region mesh
-                var mesh = staticMeshComp.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
+            var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+            if (staticMeshCompLazy.IsNull) return;
 
-                if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
-                    var actorBlueprint = actor.Class;
 
-                    if (actorBlueprint is UBlueprintGeneratedClass) {
-                        foreach (var actorExp in actorBlueprint.Owner.GetExports()) {
-                            if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
-                                break;
-                            }
+            // identifiers
+            var comp = new JArray();
+            comps.Add(comp);
+            comp.Add(actor.TryGetValue<FGuid>(out var guid, "MyGuid") // /Script/FortniteGame.BuildingActor:MyGuid
+                ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant()
+                : Guid.NewGuid().ToString().Replace("-", ""));
+            comp.Add(actor.Name);
+
+            // region mesh
+            var staticMeshComp = staticMeshCompLazy?.Load();
+            var mesh = staticMeshComp.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
+
+            if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
+                var actorBlueprint = actor.Class;
+
+                if (actorBlueprint is UBlueprintGeneratedClass) {
+                    foreach (var actorExp in actorBlueprint.Owner.GetExports()) {
+                        if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                            break;
                         }
                     }
                 }
-                // endregion
+            }
+            // endregion
 
-                var matsObj = new JObject(); // matpath: [4x[str]]
-                var textureDataArr = new JArray();
-                var materials = new List<Mat>();
-                ExportMesh(mesh, materials);
+            var matsObj = new JObject(); // matpath: [4x[str]]
+            var textureDataArr = new JArray();
+            var materials = new List<Mat>();
+            ExportMesh(mesh, materials);
 
-                if (config.bReadMaterials /*&& actor is BuildingSMActor*/) {
-                    var material = actor.GetOrDefault<FPackageIndex>("BaseMaterial"); // /Script/FortniteGame.BuildingSMActor:BaseMaterial
-                    var overrideMaterials = staticMeshComp.GetOrDefault<List<FPackageIndex>>("OverrideMaterials"); // /Script/Engine.MeshComponent:OverrideMaterials
+            if (config.bReadMaterials /*&& actor is BuildingSMActor*/) {
+                var material = actor.GetOrDefault<FPackageIndex>("BaseMaterial"); // /Script/FortniteGame.BuildingSMActor:BaseMaterial
+                var overrideMaterials = staticMeshComp.GetOrDefault<List<FPackageIndex>>("OverrideMaterials"); // /Script/Engine.MeshComponent:OverrideMaterials
 
-                    foreach (var textureDataIdx in actor.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
-                        var td = textureDataIdx?.Load();
+                foreach (var textureDataIdx in actor.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
+                    var td = textureDataIdx?.Load();
 
-                        if (td != null) {
-                            var textures = new JArray();
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
-                            textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
-                            var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
-                            if (overrideMaterial is {IsNull: false}) {
-                                material = overrideMaterial;
-                            }
-                        } else {
-                            textureDataArr.Add(JValue.CreateNull());
+                    if (td != null) {
+                        var textures = new JArray();
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
+                        textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
+                        var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
+                        if (overrideMaterial is {IsNull: false}) {
+                            material = overrideMaterial;
                         }
-                    }
-
-                    for (int i = 0; i < materials.Count; i++) {
-                        var mat = materials[i];
-                        if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
-                            // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
-                            mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
-                        }
-                        mat.PopulateTextures();
-                        mat.AddToObj(matsObj);
+                    } else {
+                        textureDataArr.Add(JValue.CreateNull());
                     }
                 }
 
-                // region additional worlds
+                for (int i = 0; i < materials.Count; i++) {
+                    var mat = materials[i];
+                    if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
+                        // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
+                        mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
+                    }
+                    mat.PopulateTextures();
+                    mat.AddToObj(matsObj);
+                }
+            }
+
+            // region additional worlds
+            var children = new JArray();
+            var additionalWorlds = actor.GetOrDefault<List<FSoftObjectPath>>("AdditionalWorlds"); // /Script/FortniteGame.BuildingFoundation:AdditionalWorlds
+
+            if (config.bExportBuildingFoundations && additionalWorlds != null) {
+                foreach (var additionalWorld in additionalWorlds) {
+                    var text = additionalWorld.AssetPathName.Text;
+                    GC.Collect();
+                    var childPackage = ExportAndProduceProcessed(text);
+                    children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
+                }
+            }
+            // endregion
+
+            var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
+            var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
+            var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+            comp.Add(PackageIndexToDirPath(mesh));
+            comp.Add(matsObj);
+            comp.Add(textureDataArr);
+            comp.Add(Vector(loc)); // /Script/Engine.SceneComponent:RelativeLocation
+            comp.Add(Rotator(rot)); // /Script/Engine.SceneComponent:RelativeRotation
+            comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
+            comp.Add(children);
+
+            int LightIndex = -1;
+            if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
+                var infor = new LightInfo2() {
+                    Props = lightinfo.ToArray()
+                };
+                lights.Add(infor);
+                LightIndex = lights.Count - 1;
+            }
+            comp.Add(LightIndex);
+
+
+        /*if (config.bExportBuildingFoundations) {
+            foreach (var streamingLevelLazy in world.StreamingLevels) {
+                UObject streamingLevel = streamingLevelLazy.Load();
+                if (streamingLevel == null) continue;
+
                 var children = new JArray();
-                var additionalWorlds = actor.GetOrDefault<List<FSoftObjectPath>>("AdditionalWorlds"); // /Script/FortniteGame.BuildingFoundation:AdditionalWorlds
+                string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
+                var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
+                children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
 
-                if (config.bExportBuildingFoundations && additionalWorlds != null) {
-                    foreach (var additionalWorld in additionalWorlds) {
-                        var text = additionalWorld.AssetPathName.Text;
-                        GC.Collect();
-                        var childPackage = ExportAndProduceProcessed(text);
-                        children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
-                    }
-                }
-                // endregion
+                var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
 
-                var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
-                var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
-                var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
-                comp.Add(PackageIndexToDirPath(mesh));
-                comp.Add(matsObj);
-                comp.Add(textureDataArr);
-                comp.Add(Vector(loc)); // /Script/Engine.SceneComponent:RelativeLocation
-                comp.Add(Rotator(rot)); // /Script/Engine.SceneComponent:RelativeRotation
-                comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
-                comp.Add(children);
-
-                int LightIndex = -1;
-                if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
-                    var infor = new LightInfo2() {
-                        Props = lightinfo.ToArray()
-                    };
-                    lights.Add(infor);
-                    LightIndex = lights.Count - 1;
-                }
-                comp.Add(LightIndex);
-
-
-            /*if (config.bExportBuildingFoundations) {
-                foreach (var streamingLevelLazy in world.StreamingLevels) {
-                    UObject streamingLevel = streamingLevelLazy.Load();
-                    if (streamingLevel == null) continue;
-
-                    var children = new JArray();
-                    string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
-                    var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
-                    children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
-
-                    var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
-
-                    var comp = new JArray {
-                        JValue.CreateNull(), // GUID
-                        streamingLevel.Name,
-                        JValue.CreateNull(), // mesh path
-                        JValue.CreateNull(), // materials
-                        JValue.CreateNull(), // texture data
-                        Vector(transform.Translation), // location
-                        Quat(transform.Rotation), // rotation
-                        Vector(transform.Scale3D), // scale
-                        children
-                    };
-                    comps.Add(comp);
-                }
-            }*/
+                var comp = new JArray {
+                    JValue.CreateNull(), // GUID
+                    streamingLevel.Name,
+                    JValue.CreateNull(), // mesh path
+                    JValue.CreateNull(), // materials
+                    JValue.CreateNull(), // texture data
+                    Vector(transform.Translation), // location
+                    Quat(transform.Rotation), // rotation
+                    Vector(transform.Scale3D), // scale
+                    children
+                };
+                comps.Add(comp);
+            }
+        }*/
     }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
