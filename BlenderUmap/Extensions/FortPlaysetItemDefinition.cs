@@ -110,7 +110,7 @@ namespace BlenderUmap.Extensions {
                     continue;
                     // comp.Add(Program.Vector(actorRecord.GetOrDefault<FVector>("RelativeLocation")));
                     // comp.Add(Program.Rotator(actorRecord.GetOrDefault<FRotator>("RelativeRotation")));
-                    // comp.Add(Program.Vector(actorRecord.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector)));    
+                    // comp.Add(Program.Vector(actorRecord.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector)));
                 }
                 comp.Add(children);
             }

@@ -142,6 +142,7 @@ class UE4Version:  # idk why
         ("GAME_UE4_27", "GAME_UE4_27", ""),
         ("GAME_UE5_0", "GAME_UE5_0", ""),
         ("GAME_UE5_1", "GAME_UE5_1", ""),
+        ("GAME_UE5_2", "GAME_UE5_2", ""),
     )
 
 

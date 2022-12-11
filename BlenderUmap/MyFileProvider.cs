@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using CUE4Parse.Encryption.Aes;
 using CUE4Parse.FileProvider;
@@ -22,7 +24,7 @@ namespace BlenderUmap {
     public class MyFileProvider : DefaultFileProvider {
         public static readonly DirectoryInfo JSONS_FOLDER = new("jsons");
         private readonly Cache _cache;
-        private readonly bool _bDumpAssets; 
+        private readonly bool _bDumpAssets;
 
         public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, new VersionContainer(game)) {
             _cache = new Cache(cacheSize);
@@ -95,11 +97,11 @@ namespace BlenderUmap {
             {
                 return null;
             }
-        
+
             if (TryLoadPackage(path, out var package)) {
                 return package;
             }
-            
+
             return await TryLoadPackageAsync(file).ConfigureAwait(false);
         }
 
@@ -143,7 +145,7 @@ namespace BlenderUmap {
 
         public void DumpJson(IPackage package) {
             var output = new FileInfo(Path.Combine(Program.GetExportDir(package).ToString(), package.Name.SubstringAfterLast("/") + ".json"));
-            if (output.Exists) 
+            if (output.Exists && output.Length > 0)
                 return;
             using var writer = new StreamWriter(output.FullName);
             writer.Write(JsonConvert.SerializeObject(package.GetExports(), Formatting.Indented));
