@@ -10,7 +10,7 @@ def add_files_to_zip(zip_file: zipfile.ZipFile, pattern, prefix=''):
 try: os.mkdir('release')
 except FileExistsError: pass
 
-for target in ["win-x64", "osx-x64", "linux-x64"]:
+for target in ["osx.12-x64", "win-x64", "osx-x64", "linux-x64"]:
     try:
         for f in glob.glob("./BlenderUmap/bin/Publish/**"):
             os.remove(f)
