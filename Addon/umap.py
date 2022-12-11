@@ -136,22 +136,23 @@ def import_material(ob: bpy.types.Object,
                     m_idx: int,
                     path: str,
                     suffix: str,
-                    base_textures: list,
+                    material_info: dict,
                     tex_data: dict,tex_shader, data_dir) -> bpy.types.Material:
     # .mat is required to prevent conflicts with empty ones imported by PSK/PSA plugin
     m_name = os.path.basename(path + ".mat" + suffix)
     m = bpy.data.materials.get(m_name)
 
     if not m:
-        for td_idx, td_entry in enumerate(tex_data):
-            if not td_entry:
-                continue
-            index = {1: 3, 2: 2, 3: 2}.get(td_idx, 0)
-            td_textures = td_entry[1]
+        # TODO this is used for BuildTextureData stuff
+        # for td_idx, td_entry in enumerate(tex_data):
+        #     if not td_entry:
+        #         continue
+        #     index = {1: 3, 2: 2, 3: 2}.get(td_idx, 0)
+        #     td_textures = td_entry[1]
 
-            for i, tex_entry in enumerate(base_textures[index]):
-                if i < len(td_textures) and td_textures[i]:
-                    base_textures[index][i] = td_textures[i]
+        #     for i, tex_entry in enumerate(material_info[index]):
+        #         if i < len(td_textures) and td_textures[i]:
+        #             material_info[index][i] = td_textures[i]
 
         m = bpy.data.materials.new(name=m_name)
         m.use_nodes = True
@@ -167,7 +168,7 @@ def import_material(ob: bpy.types.Object,
             sh = tree.nodes.new("ShaderNodeGroup")
             sh.location = location
             sh.node_tree = tex_shader
-            sub_textures = base_textures[sub_tex_idx] if sub_tex_idx < len(base_textures) and base_textures[sub_tex_idx] and len(base_textures[sub_tex_idx]) > 0 else base_textures[0]
+            sub_textures = material_info[sub_tex_idx] if sub_tex_idx < len(material_info) and material_info[sub_tex_idx] and len(material_info[sub_tex_idx]) > 0 else material_info[0]
 
             for tex_index, sub_tex in enumerate(sub_textures):
                 if sub_tex:

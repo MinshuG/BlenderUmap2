@@ -119,10 +119,10 @@ public static class ReplayExporter
                         var td = textureDataIdx?.Load();
 
                         if (td != null) {
-                            var textures = new JArray();
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
+                            var textures = new JObject();
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), "Diffuse_TD");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"), "Normal_TD");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), "Specular_TD");
                             textureDataArr.Add(new JArray { Program.PackageIndexToDirPath(textureDataIdx), textures });
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
                             if (overrideMaterial is {IsNull: false}) {

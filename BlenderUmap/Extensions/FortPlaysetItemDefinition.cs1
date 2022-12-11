@@ -68,7 +68,7 @@ namespace BlenderUmap.Extensions {
 
                     foreach (var tdPkg in actorDatas.GetProps<string>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
                         if (provider.TryLoadObject(tdPkg, out var td)) {
-                            var textures = new JArray();
+                            var textures = new JObject();
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
                             Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));

@@ -156,9 +156,9 @@ namespace BlenderUmap {
                 }
             }
 
-            if (obj.ExportType == "FortPlaysetItemDefinition") {
-                return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj, provider);
-            }
+            // if (obj.ExportType == "FortPlaysetItemDefinition") {
+            //     return FortPlaysetItemDefinition.ExportAndProduceProcessed(obj, provider);
+            // }
 
             if (obj is not UWorld world) {
                 Log.Information("{0} is not a World, won't try to export", obj.GetPathName());
@@ -189,15 +189,16 @@ namespace BlenderUmap {
             Log.Information("Writing to {0}", file.FullName);
 
             using var writer = file.CreateText();
-            new JsonSerializer().Serialize(writer, comps);
 
             var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
             file2.Directory.Create();
 
             using var writer2 = file2.CreateText();
 #if DEBUG
+            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer, comps);
             new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer2, lights);
 #else
+            new JsonSerializer().Serialize(writer, comps);
             new JsonSerializer().Serialize(writer2, lights);
 #endif
 
@@ -284,17 +285,19 @@ namespace BlenderUmap {
 
             // region mesh
             var staticMeshComp = staticMeshCompLazy?.Load();
-            var mesh = staticMeshComp.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
+            var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
 
             if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
                 var actorBlueprint = actor.Class;
 
                     if (actorBlueprint is UBlueprintGeneratedClass) {
-                        foreach (var actorExp in actorBlueprint.Owner.GetExports()) {
-                            if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
-                                break;
+                        if (actorBlueprint.Owner != null)
+                            foreach (var actorExp in actorBlueprint.Owner.GetExports()) {
+                                if (actorExp.ExportType != "FortKillVolume_C" &&
+                                    (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                    break;
+                                }
                             }
-                        }
                     }
                 }
                 // endregion
@@ -311,20 +314,20 @@ namespace BlenderUmap {
                 foreach (var textureDataIdx in actor.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
                     var td = textureDataIdx?.Load();
 
-                    if (td != null) {
-                        var textures = new JArray();
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"));
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"));
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"));
-                        textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
-                        var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
-                        if (overrideMaterial is {IsNull: false}) {
-                            material = overrideMaterial;
+                        if (td != null) {
+                            var textures = new JObject();
+                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), "Diffuse_TD");
+                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"), "Normal_TD");
+                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), "Specular_TD");
+                            textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
+                            var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
+                            if (overrideMaterial is {IsNull: false}) {
+                                material = overrideMaterial;
+                            }
+                        } else {
+                            textureDataArr.Add(JValue.CreateNull());
                         }
-                    } else {
-                        textureDataArr.Add(JValue.CreateNull());
                     }
-                }
 
                 for (int i = 0; i < materials.Count; i++) {
                     var mat = materials[i];
@@ -401,12 +404,12 @@ namespace BlenderUmap {
         }*/
     }
 
-        public static void AddToArray(JArray array, FPackageIndex index) {
+        public static void AddToArray(JObject matDict, FPackageIndex index, string ParamName) {
             if (index != null) {
                 ExportTexture(index);
-                array.Add(PackageIndexToDirPath(index));
+                matDict[ParamName] = PackageIndexToDirPath(index);
             } else {
-                array.Add(JValue.CreateNull());
+                matDict.Add(JValue.CreateNull());
             }
         }
 
@@ -566,7 +569,10 @@ namespace BlenderUmap {
 
         public class Mat {
             public ResolvedObject Material;
-            private readonly Dictionary<string, FPackageIndex> _textureMap = new();
+            public string ShaderName;
+
+            private readonly Dictionary<string, FPackageIndex> TextureParameterValues = new();
+            private readonly Dictionary<string, float> ScalarParameterValues = new();
 
             public Mat(ResolvedObject material) {
                 Material = material;
@@ -581,6 +587,10 @@ namespace BlenderUmap {
                     return;
                 }
 
+                if (obj is UMaterial) {
+                    ShaderName = obj.Name;
+                }
+
                 #region PossiblyOldFormat
 
                 foreach (var propertyTag in material.Properties) {
@@ -590,8 +600,8 @@ namespace BlenderUmap {
                     if (text is FExpressionInput materialInput) {
                         var expression = obj.Owner!.GetExportOrNull(materialInput.ExpressionName.ToString());
                         if (expression != null && expression.TryGetValue(out FPackageIndex texture, "Texture")) {
-                            if (!_textureMap.ContainsKey(propertyTag.Name.ToString())) {
-                                _textureMap[propertyTag.Name.ToString()] = texture;
+                            if (!TextureParameterValues.ContainsKey(propertyTag.Name.ToString())) {
+                                TextureParameterValues[propertyTag.Name.ToString()] = texture;
                             }
                         }
                     }
@@ -601,8 +611,8 @@ namespace BlenderUmap {
                     foreach (var export in exports) {
                         if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
                             if (export.TryGetValue(out FPackageIndex parameterValue, "Texture")) {
-                                if (!_textureMap.ContainsKey(name.Text)) {
-                                    _textureMap[name.Text] = parameterValue;
+                                if (!TextureParameterValues.ContainsKey(name.Text)) {
+                                    TextureParameterValues[name.Text] = parameterValue;
                                 }
                             }
                         }
@@ -612,6 +622,7 @@ namespace BlenderUmap {
                 // for some materials we still don't have the textures
                 #endregion
 
+                #region Texture
                 var textureParameterValues =
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
@@ -620,13 +631,22 @@ namespace BlenderUmap {
                         var name = textureParameterValue.ParameterInfo.Name;
                         if (!name.IsNone) {
                             var parameterValue = textureParameterValue.ParameterValue;
-                            if (!_textureMap.ContainsKey(name.Text)) {
-                                _textureMap[name.Text] = parameterValue;
+                            if (!TextureParameterValues.ContainsKey(name.Text)) {
+                                TextureParameterValues[name.Text] = parameterValue;
                             }
                         }
                     }
                 }
+                #endregion
 
+                #region scaler
+                var scalerParameterValues =
+                    material.GetOrDefault<List<FScalarParameterValue>>("ScalarParameterValues", new List<FScalarParameterValue>());
+                foreach (var scalerParameterValue in scalerParameterValues) {
+                    ScalarParameterValues[scalerParameterValue.Name] = scalerParameterValue.ParameterValue;
+                }
+
+                #endregion
                 if (material is UMaterialInstance mi) {
                     if (mi.Parent != null) {
                         PopulateTextures(mi.Parent);
@@ -640,60 +660,80 @@ namespace BlenderUmap {
                     return;
                 }
 
-                FPackageIndex[][] textures = { // d n s e a
-                    new[] {
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Diffuse),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Normal),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Specular),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.Emission),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV1.MaskTexture)
-                    },
-                    new[] {
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Diffuse),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Normal),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Specular),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.Emission),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV2.MaskTexture)
-                    },
-                    new[] {
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Diffuse),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Normal),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Specular),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.Emission),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV3.MaskTexture)
-                    },
-                    new[] {
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Diffuse),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Normal),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Specular),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.Emission),
-                        _textureMap.GetAnyValueOrDefault(config.Textures.UV4.MaskTexture)
+                // FPackageIndex[][] textures = { // d n s e a
+                //     new[] {
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV1.Diffuse),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV1.Normal),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV1.Specular),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV1.Emission),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV1.MaskTexture)
+                //     },
+                //     new[] {
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV2.Diffuse),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV2.Normal),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV2.Specular),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV2.Emission),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV2.MaskTexture)
+                //     },
+                //     new[] {
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV3.Diffuse),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV3.Normal),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV3.Specular),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV3.Emission),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV3.MaskTexture)
+                //     },
+                //     new[] {
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV4.Diffuse),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV4.Normal),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV4.Specular),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV4.Emission),
+                //         TextureParameterValues.GetAnyValueOrDefault(config.Textures.UV4.MaskTexture)
+                //     }
+                // };
+
+                var text_array = new JObject();
+                foreach (var text in TextureParameterValues) {
+                    var index = text.Value;
+                    if (index is { IsNull: false }) {
+                        ExportTexture(index);
+                        text_array[text.Key] = PackageIndexToDirPath(index);
                     }
-                };
-
-                var array = new JArray();
-                foreach (var texture in textures) {
-                    bool empty = true;
-                    foreach (var index in texture) {
-                        empty &= index == null;
-
-                        if (index != null) {
-                            ExportTexture(index);
-                        }
-                    }
-
-                    var subArray = new JArray();
-                    if (!empty) {
-                        foreach (var index in texture) {
-                            subArray.Add(PackageIndexToDirPath(index));
-                        }
-                    }
-
-                    array.Add(subArray);
                 }
 
-                if (!obj.ContainsKey(PackageIndexToDirPath(Material)))
-                    obj.Add(PackageIndexToDirPath(Material), array);
+                var scaler_array = new JObject();
+                foreach (var val in ScalarParameterValues) {
+                    scaler_array[val.Key] = val.Value;
+                }
+
+                // foreach (var texture in textures) {
+                //     bool empty = true;
+                //     foreach (var index in texture) {
+                //         empty &= index == null;
+                //
+                //         if (index != null) {
+                //             ExportTexture(index);
+                //         }
+                //     }
+                //
+                //     var subArray = new JArray();
+                //     if (!empty) {
+                //         foreach (var index in texture) {
+                //             subArray.Add(PackageIndexToDirPath(index));
+                //         }
+                //     }
+                //
+                //     array.Add(subArray);
+                // }
+
+                if (!obj.ContainsKey(PackageIndexToDirPath(Material))) {
+                    var combined_params = new JObject();
+
+                    combined_params.Add(nameof(ShaderName), ShaderName);
+                    combined_params.Add("TextureParams", text_array);
+                    combined_params.Add("ScalerParams", scaler_array);
+                    // combined_params.Add("VectorParams", scaler_array);
+                    obj.Add(PackageIndexToDirPath(Material), combined_params);
+                }
             }
         }
     }
