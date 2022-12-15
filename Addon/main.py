@@ -53,13 +53,21 @@ def main(context, onlyimport=False):
     uvm = bpy.data.node_groups.get("UV Shader Mix")
     tex_shader = bpy.data.node_groups.get("Texture Shader")
 
-    if not uvm or not tex_shader:
+    if not uvm or not tex_shader: # do we need this anymore?
         create_node_groups()
         # with bpy.data.libraries.load(os.path.join(addon_dir, "deps.blend")) as (data_from, data_to):
         #     data_to.node_groups = data_from.node_groups
-
         uvm = bpy.data.node_groups.get("UV Shader Mix")
         tex_shader = bpy.data.node_groups.get("Texture Shader")
+
+    # append all the node groups from blend files in the deps folder
+    shader_folder = os.path.join(data_dir, "shader")
+    if os.path.exists(shader_folder):
+        for shaderfile in os.listdir(shader_folder):
+            if shaderfile.endswith(".blend"):
+                print("Appending node groups from " + shaderfile)
+                with bpy.data.libraries.load(os.path.join(data_dir, "shader", shaderfile)) as (data_from, data_to):
+                    data_to.node_groups = data_from.node_groups
 
     # make sure we're on main scene to deal with the fallback objects
     main_scene = bpy.data.scenes.get("Scene") or bpy.data.scenes.new("Scene")

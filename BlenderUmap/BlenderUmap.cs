@@ -37,6 +37,11 @@ namespace BlenderUmap {
         public static Config config;
         public static MyFileProvider provider;
         private static readonly long start = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+#if DEBUG
+        private static readonly bool NoExport = false;
+#else
+        private static readonly bool NoExport = false;
+#endif
 
         public static void Main(string[] args) {
             Log.Logger = new LoggerConfiguration()
@@ -299,8 +304,8 @@ namespace BlenderUmap {
                                 }
                             }
                     }
-                }
-                // endregion
+            }
+            // endregion
 
             var matsObj = new JObject(); // matpath: [4x[str]]
             var textureDataArr = new JArray();
@@ -314,20 +319,20 @@ namespace BlenderUmap {
                 foreach (var textureDataIdx in actor.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
                     var td = textureDataIdx?.Load();
 
-                        if (td != null) {
-                            var textures = new JObject();
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), "Diffuse_TD");
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"), "Normal_TD");
-                            AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), "Specular_TD");
-                            textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
-                            var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
-                            if (overrideMaterial is {IsNull: false}) {
-                                material = overrideMaterial;
-                            }
-                        } else {
-                            textureDataArr.Add(JValue.CreateNull());
+                    if (td != null) {
+                        var textures = new JObject();
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), "Diffuse_TD");
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"), "Normal_TD");
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), "Specular_TD");
+                        textureDataArr.Add(new JArray { PackageIndexToDirPath(textureDataIdx), textures });
+                        var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
+                        if (overrideMaterial is {IsNull: false}) {
+                            material = overrideMaterial;
                         }
+                    } else {
+                        textureDataArr.Add(JValue.CreateNull());
                     }
+                }
 
                 for (int i = 0; i < materials.Count; i++) {
                     var mat = materials[i];
@@ -376,32 +381,32 @@ namespace BlenderUmap {
             comp.Add(LightIndex);
 
 
-        /*if (config.bExportBuildingFoundations) {
-            foreach (var streamingLevelLazy in world.StreamingLevels) {
-                UObject streamingLevel = streamingLevelLazy.Load();
-                if (streamingLevel == null) continue;
-
-                var children = new JArray();
-                string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
-                var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
-                children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
-
-                var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
-
-                var comp = new JArray {
-                    JValue.CreateNull(), // GUID
-                    streamingLevel.Name,
-                    JValue.CreateNull(), // mesh path
-                    JValue.CreateNull(), // materials
-                    JValue.CreateNull(), // texture data
-                    Vector(transform.Translation), // location
-                    Quat(transform.Rotation), // rotation
-                    Vector(transform.Scale3D), // scale
-                    children
-                };
-                comps.Add(comp);
-            }
-        }*/
+            /*if (config.bExportBuildingFoundations) {
+                foreach (var streamingLevelLazy in world.StreamingLevels) {
+                    UObject streamingLevel = streamingLevelLazy.Load();
+                    if (streamingLevel == null) continue;
+    
+                    var children = new JArray();
+                    string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
+                    var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
+                    children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
+    
+                    var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
+    
+                    var comp = new JArray {
+                        JValue.CreateNull(), // GUID
+                        streamingLevel.Name,
+                        JValue.CreateNull(), // mesh path
+                        JValue.CreateNull(), // materials
+                        JValue.CreateNull(), // texture data
+                        Vector(transform.Translation), // location
+                        Quat(transform.Rotation), // rotation
+                        Vector(transform.Scale3D), // scale
+                        children
+                    };
+                    comps.Add(comp);
+                }
+            }*/
     }
 
         public static void AddToArray(JObject matDict, FPackageIndex index, string ParamName) {
@@ -409,11 +414,12 @@ namespace BlenderUmap {
                 ExportTexture(index);
                 matDict[ParamName] = PackageIndexToDirPath(index);
             } else {
-                matDict.Add(JValue.CreateNull());
+                // matDict.Add(JValue.CreateNull());
             }
         }
 
         private static void ExportTexture(FPackageIndex index) {
+            if (NoExport) return;
             try {
                 var obj = index.Load();
                 if (obj is not UTexture2D texture) {
@@ -454,7 +460,7 @@ namespace BlenderUmap {
             if (meshExport == null) return;
             var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
 
-            if (!output.Exists) {
+            if (!output.Exists && !NoExport) {
                 ThreadPool.QueueUserWorkItem(_ => {
                     if (!output.Exists) {
                         Log.Information("Saving mesh to {0}", output.FullName);

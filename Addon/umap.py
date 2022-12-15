@@ -49,8 +49,8 @@ def import_umap(processed_map_path: str,
         # if light_index == -1:
         #     continue
 
-        # if not name.startswith("CP_Wall_Light4_C"):
-        #     continue
+        if name.startswith("RVT_Decal"):
+            continue
 
         print("\nActor %d of %d: %s" % (comp_i + 1, len(comps), name))
 
@@ -164,51 +164,46 @@ def import_material(ob: bpy.types.Object,
         m.use_backface_culling = True
         m.blend_method = "OPAQUE"
 
-        def group(sub_tex_idx, location,tex_shader):
-            sh = tree.nodes.new("ShaderNodeGroup")
-            sh.location = location
-            sh.node_tree = tex_shader
-            sub_textures = material_info[sub_tex_idx] if sub_tex_idx < len(material_info) and material_info[sub_tex_idx] and len(material_info[sub_tex_idx]) > 0 else material_info[0]
+        shader_name = material_info["ShaderName"]
+        shader_node_group = create_node_group(shader_name, material_info.get("TextureParams", []), material_info.get("ScalerParams", []), material_info.get("VectorParams", []))
 
-            for tex_index, sub_tex in enumerate(sub_textures):
-                if sub_tex:
-                    img = get_or_load_img(sub_tex, data_dir) if not sub_tex.endswith("/T_EmissiveColorChart") else None
+        # spawn the shader into material and connect it to output
+        shader_node = tree.nodes.new("ShaderNodeGroup")
+        shader_node.node_tree = shader_node_group
+        shader_node.location = 0, 0
+        shader_node.name = shader_name
 
-                    if img:
-                        d_tex = tree.nodes.new("ShaderNodeTexImage")
-                        d_tex.hide = True
-                        d_tex.location = [location[0] - 320, location[1] - tex_index * 40]
+        output_node = tree.nodes.new("ShaderNodeOutputMaterial")
+        output_node.location = 300, 0
+        tree.links.new(shader_node.outputs[0], output_node.inputs[0])
 
-                        if tex_index != 0:  # other than diffuse
-                            img.colorspace_settings.name = "Non-Color"
+        # spawn the textures into material
+        offset = 0
+        for input_name, tex_path in material_info["TextureParams"].items():
+            if tex_path:
+                tex = get_or_load_img(tex_path, data_dir)
+                tex_node = tree.nodes.new("ShaderNodeTexImage")
+                tex_node.image = tex
+                tex_node.location = -300, offset
+                tex_node.hide = True
+                tree.links.new(tex_node.outputs[0], shader_node.inputs[input_name])
+                offset -= 30
 
-                        d_tex.image = img
-                        tree.links.new(d_tex.outputs[0], sh.inputs[tex_index])
+        # spawn the scalers into material
+        for input_name, value in material_info["ScalerParams"].items():
+            value_node = tree.nodes.new("ShaderNodeValue")
+            value_node.outputs[0].default_value = value
+            value_node.location = -300, offset
+            tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
+            offset -= 90
 
-                        if tex_index == 4:  # change mat blend method if there's an alpha mask texture
-                            m.blend_method = 'CLIP'
+        # for space in bpy.context.area.spaces:
+        #     if space.type == 'SHADER_EDITOR':
+        #         dope_sheet = space
+        #         break
+        # bpy.context.space_data.node_tree = shader_node.node_tree
 
-            return sh
-
-        mat_out = tree.nodes.new("ShaderNodeOutputMaterial")
-        mat_out.location = [300, 300]
-
-        if ob.data.uv_layers.get("EXTRAUVS0"):
-            uvm_ng = tree.nodes.new("ShaderNodeGroup")
-            uvm_ng.location = [100, 300]
-            uvm_ng.node_tree = bpy.data.node_groups["UV Shader Mix"]
-            uv_map = tree.nodes.new("ShaderNodeUVMap")
-            uv_map.location = [-100, 700]
-            uv_map.uv_map = "EXTRAUVS0"
-            tree.links.new(uv_map.outputs[0], uvm_ng.inputs[0])
-            tree.links.new(group(0, [-100, 550],tex_shader).outputs[0], uvm_ng.inputs[1])
-            tree.links.new(group(1, [-100, 300], tex_shader).outputs[0], uvm_ng.inputs[2], )
-            tree.links.new(group(2, [-100, 50], tex_shader).outputs[0], uvm_ng.inputs[3])
-            tree.links.new(group(3, [-100, -200], tex_shader).outputs[0], uvm_ng.inputs[4])
-            tree.links.new(uvm_ng.outputs[0], mat_out.inputs[0])
-        else:
-            tree.links.new(group(0, [100, 300], tex_shader).outputs[0], mat_out.inputs[0])
-
+        # bpy.ops.node.button()
         print("Material imported")
 
     # if m_idx < len(ob.data.materials):
@@ -221,6 +216,30 @@ def import_material(ob: bpy.types.Object,
         ob.data.materials[found_index] = m
 
     return m
+
+def create_node_group(name, texture_inputs, scaler_inputs, vector_inputs):
+        group = bpy.data.node_groups.get(name)
+        if group is None:
+            group = bpy.data.node_groups.new(name, 'ShaderNodeTree')
+            group.nodes.new('NodeGroupOutput')
+            group.nodes.new('NodeGroupInput')
+            group.outputs.new('NodeSocketShader', 'Out')
+
+        # scaler_inputs, texture_inputs, vector_inputs = self.scaler_params, self.texture_params, self.vector_params
+
+        for input_name in texture_inputs:
+            if group.inputs.get(input_name) is None:
+                group.inputs.new('NodeSocketColor', input_name)
+
+        for input_name in scaler_inputs:
+            if group.inputs.get(input_name) is None:
+                group.inputs.new('NodeSocketFloat', input_name)
+
+        for input_name in vector_inputs:
+            if group.inputs.get(input_name) is None:
+                group.inputs.new('NodeSocketVector', input_name)
+
+        return group
 
 def find_mat_index(materials, mat_name):
     for i, mat in enumerate(materials):
