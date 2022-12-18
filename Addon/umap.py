@@ -180,15 +180,15 @@ def import_material(ob: bpy.types.Object,
 
         offset = 0
         for input_name, tex_path in material_info["TextureParams"].items():
-            if tex_path:
-                tex = get_or_load_img(tex_path, data_dir)
+            tex = get_or_load_img(tex_path, data_dir)
+            if tex:
                 tex_node = tree.nodes.new("ShaderNodeTexImage")
                 tex_node.image = tex
                 tex_node.location = -300, offset
                 tex_node.hide = True
                 tree.links.new(tex_node.outputs[0], shader_node.inputs[input_name])
-                if input_name+"_Alpha" in shader_node.inputs:
-                    tree.links.new(tex_node.outputs[1], shader_node.inputs[input_name+"_Alpha"])
+                if input_name+"_Alpha" in shader_node.inputs: tree.links.new(tex_node.outputs[1], shader_node.inputs[input_name+"_Alpha"])
+                if input_name+"_HasValue" in shader_node.inputs: shader_node.inputs[input_name+"_HasValue"].default_value = 1
                 offset -= 40
 
         for input_name, value in material_info["ScalerParams"].items():

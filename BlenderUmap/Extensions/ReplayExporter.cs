@@ -122,9 +122,12 @@ public static class ReplayExporter
 
                         if (td != null) {
                             var textures = new Dictionary<string, string>();
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), $"Diffuse_Texture_{4-texIndex}"); // texIndex == 0 ? "Diffuse" : 
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  $"Normals_Texture_{4-texIndex}"); // texIndex == 0 ? "Normals" : 
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), $"SpecularMasks_{4-texIndex}"); // texIndex == 0 ? "SpecularMasks" :
+                            // Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}");
+                            // Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}");
+                            // Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
                             textureDataArr.Add(textures);
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
                             if (overrideMaterial is {IsNull: false}) {
