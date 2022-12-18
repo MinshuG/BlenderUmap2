@@ -197,6 +197,7 @@ namespace BlenderUmap {
             _cache.TryAdd(path, package);
         }
     }
+
     public class EncryptionKey {
         public FGuid Guid;
         public string FileName;

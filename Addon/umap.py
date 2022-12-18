@@ -39,7 +39,7 @@ def import_umap(processed_map_path: str,
         name = comp[1]
         mesh_path = comp[2]
         mats = comp[3]
-        texture_data = comp[4]
+        texture_data = [] #comp[4]
         location = comp[5] or [0, 0, 0]
         rotation = comp[6] or [0, 0, 0]
         scale = comp[7] or [1, 1, 1]
@@ -161,8 +161,9 @@ def import_material(ob: bpy.types.Object,
         for node in tree.nodes:
             tree.nodes.remove(node)
 
-        m.use_backface_culling = True
-        m.blend_method = "OPAQUE"
+        m.use_backface_culling = False
+        # m.blend_method = "OPAQUE"
+        m.blend_method = "CLIP"
 
         shader_name = material_info["ShaderName"]
         shader_node_group = create_node_group(shader_name, material_info.get("TextureParams", []), material_info.get("ScalerParams", []), material_info.get("VectorParams", []))
@@ -177,7 +178,6 @@ def import_material(ob: bpy.types.Object,
         output_node.location = 300, 0
         tree.links.new(shader_node.outputs[0], output_node.inputs[0])
 
-        # spawn the textures into material
         offset = 0
         for input_name, tex_path in material_info["TextureParams"].items():
             if tex_path:
@@ -187,15 +187,29 @@ def import_material(ob: bpy.types.Object,
                 tex_node.location = -300, offset
                 tex_node.hide = True
                 tree.links.new(tex_node.outputs[0], shader_node.inputs[input_name])
-                offset -= 30
+                if input_name+"_Alpha" in shader_node.inputs:
+                    tree.links.new(tex_node.outputs[1], shader_node.inputs[input_name+"_Alpha"])
+                offset -= 40
 
-        # spawn the scalers into material
         for input_name, value in material_info["ScalerParams"].items():
-            value_node = tree.nodes.new("ShaderNodeValue")
-            value_node.outputs[0].default_value = value
-            value_node.location = -300, offset
-            tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
-            offset -= 90
+            # value_node = tree.nodes.new("ShaderNodeValue")
+            shader_node.inputs[input_name].default_value = value
+
+            # value_node.outputs[0].default_value = value
+            # value_node.location = -300, offset
+            # tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
+            # offset -= 100
+
+
+        # VectorParams (Color)
+        for input_name, value in material_info["VectorParams"].items():
+            # value_node = tree.nodes.new("ShaderNodeRGB")
+            shader_node.inputs[input_name].default_value = hex_to_rgb(value)
+            # value_node.outputs[0].default_value = hex_to_rgb(value)
+            # value_node.location = -300, offset
+            # tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
+            # offset -= 200
+
 
         # for space in bpy.context.area.spaces:
         #     if space.type == 'SHADER_EDITOR':
@@ -217,6 +231,10 @@ def import_material(ob: bpy.types.Object,
 
     return m
 
+def hex_to_rgb(hex_): # ARGB
+    hex_ = "ff" + hex_ if len(hex_) == 6 else hex_
+    return tuple(int(hex_[i:i+2], 16)/255 for i in (2, 4, 6, 0))
+
 def create_node_group(name, texture_inputs, scaler_inputs, vector_inputs):
         group = bpy.data.node_groups.get(name)
         if group is None:
@@ -230,6 +248,7 @@ def create_node_group(name, texture_inputs, scaler_inputs, vector_inputs):
         for input_name in texture_inputs:
             if group.inputs.get(input_name) is None:
                 group.inputs.new('NodeSocketColor', input_name)
+                group.inputs[input_name].hide_value = True
 
         for input_name in scaler_inputs:
             if group.inputs.get(input_name) is None:
@@ -237,7 +256,7 @@ def create_node_group(name, texture_inputs, scaler_inputs, vector_inputs):
 
         for input_name in vector_inputs:
             if group.inputs.get(input_name) is None:
-                group.inputs.new('NodeSocketVector', input_name)
+                group.inputs.new('NodeSocketColor', input_name)
 
         return group
 

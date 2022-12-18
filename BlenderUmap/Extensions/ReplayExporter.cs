@@ -107,7 +107,7 @@ public static class ReplayExporter
                 comp.Add(ac.Name);
 
                 var matsObj = new JObject(); // matpath: [4x[str]]
-                var textureDataArr = new JArray();
+                var textureDataArr = new List<Dictionary<string, string>>();
                 var materials = new List<Program.Mat>();
                 Program.ExportMesh(mesh, materials);
 
@@ -115,21 +115,23 @@ public static class ReplayExporter
                     var material = ac.GetOrDefault<FPackageIndex>("BaseMaterial");
                     var overrideMaterials = staticMeshComp?.GetOrDefault<List<FPackageIndex>>("OverrideMaterials");
 
-                    foreach (var textureDataIdx in ac.GetProps<FPackageIndex>("TextureData")) { // /Script/FortniteGame.BuildingSMActor:TextureData
+                    var textureDatas = ac.GetProps<FPackageIndex>("TextureData"); // /Script/FortniteGame.BuildingSMActor:TextureData
+                    for (var texIndex = 0; texIndex < textureDatas.Length; texIndex++) {
+                        var textureDataIdx = textureDatas[texIndex];
                         var td = textureDataIdx?.Load();
 
                         if (td != null) {
-                            var textures = new JObject();
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), "Diffuse_TD");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"), "Normal_TD");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), "Specular_TD");
-                            textureDataArr.Add(new JArray { Program.PackageIndexToDirPath(textureDataIdx), textures });
+                            var textures = new Dictionary<string, string>();
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
+                            textureDataArr.Add(textures);
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
                             if (overrideMaterial is {IsNull: false}) {
                                 material = overrideMaterial;
                             }
                         } else {
-                            textureDataArr.Add(JValue.CreateNull());
+                            textureDataArr.Add(new Dictionary<string, string>());
                         }
                     }
 
@@ -141,14 +143,14 @@ public static class ReplayExporter
                         }
 
                         mat.PopulateTextures();
-                        mat.AddToObj(matsObj);
+                        mat.AddToObj(matsObj, textureDataArr.Count > i ? textureDataArr[i] : new Dictionary<string, string>());
                     }
                 }
 
                 var children = new JArray();
                 comp.Add(Program.PackageIndexToDirPath(mesh));
                 comp.Add(matsObj);
-                comp.Add(textureDataArr);
+                comp.Add(JArray.FromObject(textureDataArr));
                 comp.Add(Vector(actor.Location));
                 comp.Add(Rotator(actor.Rotation));
                 comp.Add(Vector(actor.Scale));
