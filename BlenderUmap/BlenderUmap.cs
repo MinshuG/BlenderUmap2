@@ -245,7 +245,9 @@ namespace BlenderUmap {
         }
 
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps) {
-            if (actor.TryGetValue(out UObject partition, "WorldPartition") && partition.TryGetValue(out UObject runtineHash, "RuntimeHash") && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
+            if (actor.TryGetValue(out UObject partition, "WorldPartition")
+                && partition.TryGetValue(out UObject runtineHash, "RuntimeHash")
+                && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
                 FStructFallback grid = null;
                 foreach (var t in streamingGrids) {
                     if (t.TryGetValue(out FName name, "GridName")) {
@@ -325,9 +327,9 @@ namespace BlenderUmap {
 
                     if (td != null) {
                         var textures = new Dictionary<string, string>();
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), $"Diffuse_Texture_{4-texIndex}"); // texIndex == 0 ? "Diffuse" : 
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  $"Normals_Texture_{4-texIndex}"); // texIndex == 0 ? "Normals" : 
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), $"SpecularMasks_{4-texIndex}"); // texIndex == 0 ? "SpecularMasks" :
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}"); //
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}"); //
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
                         textureDataArr.Add(textures);
 
                         var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
@@ -347,7 +349,7 @@ namespace BlenderUmap {
                         mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
                     }
                     mat.PopulateTextures();
-                    
+
                     mat.AddToObj(matsObj, textureDataArr.Count > i ? textureDataArr[i] : new Dictionary<string, string>());
                 }
             }
@@ -392,14 +394,14 @@ namespace BlenderUmap {
                 foreach (var streamingLevelLazy in world.StreamingLevels) {
                     UObject streamingLevel = streamingLevelLazy.Load();
                     if (streamingLevel == null) continue;
-    
+
                     var children = new JArray();
                     string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
                     var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
                     children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
-    
+
                     var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
-    
+
                     var comp = new JArray {
                         JValue.CreateNull(), // GUID
                         streamingLevel.Name,
@@ -461,7 +463,7 @@ namespace BlenderUmap {
                 Log.Warning(e, "Failed to save texture");
             }
         }
-        
+
         public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             var meshExport = mesh?.Load<UStaticMesh>();
             if (meshExport == null) return;
@@ -587,7 +589,7 @@ namespace BlenderUmap {
             private readonly Dictionary<string, FPackageIndex> TextureParameterValues = new();
             private readonly Dictionary<string, float> ScalarParameterValues = new();
             private readonly Dictionary<string, string> VectorParameterValues = new(); // hex
-            
+
 
             public Mat(ResolvedObject material) {
                 Material = material;
@@ -636,7 +638,7 @@ namespace BlenderUmap {
 
                 // for some materials we still don't have the textures
                 #endregion
- 
+
                 #region Texture
                 var textureParameterValues =
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");

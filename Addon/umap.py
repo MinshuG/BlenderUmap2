@@ -39,15 +39,16 @@ def import_umap(processed_map_path: str,
         name = comp[1]
         mesh_path = comp[2]
         mats = comp[3]
-        texture_data = [] #comp[4]
+        texture_data = comp[4]
         location = comp[5] or [0, 0, 0]
         rotation = comp[6] or [0, 0, 0]
         scale = comp[7] or [1, 1, 1]
         child_comps = comp[8]
         light_index = comp[9] if blights_exist else -1
 
-        # if light_index == -1:
-        #     continue
+        # if name is bigger than 50 (58 is blender limit) than hash it and use it as name
+        if len(name) > 50:
+            name = name[:40] + f"_{abs(string_hash_code(name)):08x}"
 
         if name.startswith("RVT_Decal"):
             continue
@@ -97,7 +98,7 @@ def import_umap(processed_map_path: str,
         if mats and len(mats) > 0:
             key += f"_{abs(string_hash_code(';'.join(mats.keys()))):08x}"
         if texture_data and len(texture_data) > 0:
-            td_suffix = f"_{abs(string_hash_code(';'.join([it[0] if it else '' for it in texture_data]))):08x}"
+            td_suffix = f"_{abs(string_hash_code(';'.join([list(it.values())[0] if it else '' for it in texture_data]))):08x}"
             key += td_suffix
 
         existing_mesh = bpy.data.meshes.get(key) if reuse_meshes else None
@@ -137,22 +138,13 @@ def import_material(ob: bpy.types.Object,
                     path: str,
                     suffix: str,
                     material_info: dict,
-                    tex_data: dict,tex_shader, data_dir) -> bpy.types.Material:
+                    tex_data: dict, tex_shader, data_dir) -> bpy.types.Material:
     # .mat is required to prevent conflicts with empty ones imported by PSK/PSA plugin
     m_name = os.path.basename(path + ".mat" + suffix)
     m = bpy.data.materials.get(m_name)
 
     if not m:
         # TODO this is used for BuildTextureData stuff
-        # for td_idx, td_entry in enumerate(tex_data):
-        #     if not td_entry:
-        #         continue
-        #     index = {1: 3, 2: 2, 3: 2}.get(td_idx, 0)
-        #     td_textures = td_entry[1]
-
-        #     for i, tex_entry in enumerate(material_info[index]):
-        #         if i < len(td_textures) and td_textures[i]:
-        #             material_info[index][i] = td_textures[i]
 
         m = bpy.data.materials.new(name=m_name)
         m.use_nodes = True
@@ -187,37 +179,24 @@ def import_material(ob: bpy.types.Object,
                 tex_node.location = -300, offset
                 tex_node.hide = True
                 tree.links.new(tex_node.outputs[0], shader_node.inputs[input_name])
-                if input_name+"_Alpha" in shader_node.inputs: tree.links.new(tex_node.outputs[1], shader_node.inputs[input_name+"_Alpha"])
-                if input_name+"_HasValue" in shader_node.inputs: shader_node.inputs[input_name+"_HasValue"].default_value = 1
+
+                if tex.depth == 32 and input_name+"_Alpha" in shader_node.inputs: # if we have alpha channel, connect it to alpha input
+                    tree.links.new(tex_node.outputs[1], shader_node.inputs[input_name+"_Alpha"])
+                    if input_name+"_HasValue" in shader_node.inputs:
+                        shader_node.inputs[input_name+"_HasValue"].default_value = 1
+                elif input_name+"_Alpha" in shader_node.inputs:
+                    shader_node.inputs[input_name+"_Alpha"].default_value = 1
+                    if input_name+"_HasValue" in shader_node.inputs:
+                        shader_node.inputs[input_name+"_HasValue"].default_value = 0
                 offset -= 40
 
         for input_name, value in material_info["ScalerParams"].items():
-            # value_node = tree.nodes.new("ShaderNodeValue")
             shader_node.inputs[input_name].default_value = value
-
-            # value_node.outputs[0].default_value = value
-            # value_node.location = -300, offset
-            # tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
-            # offset -= 100
-
 
         # VectorParams (Color)
         for input_name, value in material_info["VectorParams"].items():
-            # value_node = tree.nodes.new("ShaderNodeRGB")
             shader_node.inputs[input_name].default_value = hex_to_rgb(value)
-            # value_node.outputs[0].default_value = hex_to_rgb(value)
-            # value_node.location = -300, offset
-            # tree.links.new(value_node.outputs[0], shader_node.inputs[input_name])
-            # offset -= 200
 
-
-        # for space in bpy.context.area.spaces:
-        #     if space.type == 'SHADER_EDITOR':
-        #         dope_sheet = space
-        #         break
-        # bpy.context.space_data.node_tree = shader_node.node_tree
-
-        # bpy.ops.node.button()
         print("Material imported")
 
     # if m_idx < len(ob.data.materials):

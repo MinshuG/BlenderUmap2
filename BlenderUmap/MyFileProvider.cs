@@ -145,8 +145,8 @@ namespace BlenderUmap {
 
         public void DumpJson(IPackage package) {
             var output = new FileInfo(Path.Combine(Program.GetExportDir(package).ToString(), package.Name.SubstringAfterLast("/") + ".json"));
-            if (output.Exists && output.Length > 0)
-                return;
+            // if (output.Exists && output.Length > 0)
+            //     return;
             using var writer = new StreamWriter(output.FullName);
             writer.Write(JsonConvert.SerializeObject(package.GetExports(), Formatting.Indented));
         }
