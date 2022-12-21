@@ -172,6 +172,8 @@ def import_material(ob: bpy.types.Object,
 
         offset = 0
         for input_name, tex_path in material_info["TextureParams"].items():
+            if input_name not in shader_node.inputs: # too big name
+                continue
             tex = get_or_load_img(tex_path, data_dir)
             if tex:
                 tex_node = tree.nodes.new("ShaderNodeTexImage")
@@ -191,10 +193,14 @@ def import_material(ob: bpy.types.Object,
                 offset -= 40
 
         for input_name, value in material_info["ScalerParams"].items():
+            if input_name not in shader_node.inputs:
+                continue
             shader_node.inputs[input_name].default_value = value
 
         # VectorParams (Color)
         for input_name, value in material_info["VectorParams"].items():
+            if input_name not in shader_node.inputs:
+                continue
             shader_node.inputs[input_name].default_value = hex_to_rgb(value)
 
         print("Material imported")

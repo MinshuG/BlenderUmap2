@@ -122,9 +122,9 @@ public static class ReplayExporter
 
                         if (td != null) {
                             var textures = new Dictionary<string, string>();
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}");
-                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex+1}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex+1}");
+                            Program.AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex+1}");
                             textureDataArr.Add(textures);
                             var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
                             if (overrideMaterial is {IsNull: false}) {
@@ -143,7 +143,7 @@ public static class ReplayExporter
                         }
 
                         mat.PopulateTextures();
-                        mat.AddToObj(matsObj, textureDataArr.Count > i ? textureDataArr[i] : new Dictionary<string, string>());
+                        mat.AddToObj(matsObj, textureDataArr);
                     }
                 }
 

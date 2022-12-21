@@ -327,9 +327,9 @@ namespace BlenderUmap {
 
                     if (td != null) {
                         var textures = new Dictionary<string, string>();
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex}"); //
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex}"); //
-                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex}");
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Diffuse"), texIndex == 0 ? "Diffuse" : $"Diffuse_Texture_{texIndex+1}"); //
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Normal"),  texIndex == 0 ? "Normals" : $"Normals_Texture_{texIndex+1}"); //
+                        AddToArray(textures, td.GetOrDefault<FPackageIndex>("Specular"), texIndex == 0 ? "SpecularMasks" : $"SpecularMasks_{texIndex+1}");
                         textureDataArr.Add(textures);
 
                         var overrideMaterial = td.GetOrDefault<FPackageIndex>("OverrideMaterial");
@@ -350,7 +350,7 @@ namespace BlenderUmap {
                     }
                     mat.PopulateTextures();
 
-                    mat.AddToObj(matsObj, textureDataArr.Count > i ? textureDataArr[i] : new Dictionary<string, string>());
+                    mat.AddToObj(matsObj, textureDataArr);
                 }
             }
 
@@ -604,12 +604,14 @@ namespace BlenderUmap {
                     return;
                 }
 
-                if (obj is UMaterial) {
+                if (obj is UMaterial uMaterial) {
                     ShaderName = obj.Name;
+                    // var x = new CMaterialParams2();
+                    // uMaterial.GetParams(x);
+                    // var asd = ShaderName.Length;
                 }
 
                 #region PossiblyOldFormat
-
                 foreach (var propertyTag in material.Properties) {
                     if (propertyTag.Tag == null) return;
 
@@ -635,7 +637,6 @@ namespace BlenderUmap {
                         }
                     }
                 }
-
                 // for some materials we still don't have the textures
                 #endregion
 
@@ -656,19 +657,16 @@ namespace BlenderUmap {
                 }
                 #endregion
 
-                #region scaler
+                #region Scaler
                 var scalerParameterValues =
                     material.GetOrDefault<List<FScalarParameterValue>>("ScalarParameterValues", new List<FScalarParameterValue>());
                 foreach (var scalerParameterValue in scalerParameterValues) {
                     if (!ScalarParameterValues.ContainsKey(scalerParameterValue.Name))
                         ScalarParameterValues[scalerParameterValue.Name] = scalerParameterValue.ParameterValue;
                 }
-
                 #endregion
 
-
                 #region Vector
-
                 var vectorParameterValues = material.GetOrDefault<List<FVectorParameterValue>>("VectorParameterValues", new List<FVectorParameterValue>());
                 foreach (var vectorParameterValue in vectorParameterValues) {
                     if (!VectorParameterValues.ContainsKey(vectorParameterValue.Name)) {
@@ -685,7 +683,14 @@ namespace BlenderUmap {
                 }
             }
 
-            public void AddToObj(JObject obj, Dictionary<string, string> overrides) {
+            public void AddToObj(JObject obj, List<Dictionary<string, string>> overrides) {
+                var mergedOverrides = new Dictionary<string, string>();
+                foreach (var oOverride in overrides) {
+                    foreach (var k in oOverride) {
+                        mergedOverrides[k.Key] = k.Value;
+                    }
+                }
+
                 if (Material == null) {
                     obj.Add(GetHashCode().ToString("x"), null);
                     return;
@@ -693,8 +698,8 @@ namespace BlenderUmap {
 
                 var textArray = new JObject();
                 foreach (var text in TextureParameterValues) {
-                    if (overrides.ContainsKey(text.Key)) {
-                        textArray[text.Key] = overrides[text.Key];
+                    if (mergedOverrides.ContainsKey(text.Key)) {
+                        textArray[text.Key] = mergedOverrides[text.Key];
                         continue;
                     }
                     var index = text.Value;
@@ -704,7 +709,7 @@ namespace BlenderUmap {
                     }
                 }
 
-                foreach (var item in overrides) {
+                foreach (var item in mergedOverrides) {
                     if (!textArray.ContainsKey(item.Key)) {
                         textArray[item.Key] = item.Value;
                     }
