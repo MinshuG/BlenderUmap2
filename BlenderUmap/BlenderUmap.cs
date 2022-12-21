@@ -89,7 +89,7 @@ namespace BlenderUmap {
                 var pkg = ExportAndProduceProcessed(config.ExportPackage);
                 if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
 
-                while (ThreadPool.PendingWorkItemCount != 0) { }
+                while (ThreadPool.ThreadCount != 1) { }
                 var file = new FileInfo("processed.json");
                 Log.Information("Writing to {0}", file.FullName);
                 using (var writer = file.CreateText()) {
