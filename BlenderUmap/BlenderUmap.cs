@@ -80,10 +80,18 @@ namespace BlenderUmap {
                     Log.Information("Loaded mappings from {0}", newestUsmap.FullName);
                 }
 
-                var pkg = ExportAndProduceProcessed(config.ExportPackage);
+                var pkg = ExportAndProduceProcessed(config.ExportPackage, new List<string>());
                 if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
 
-                while (ThreadPool.PendingWorkItemCount != 0) { }
+                ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int _);
+                while (ThreadPool.ThreadCount != 1) {
+                    ThreadPool.GetAvailableThreads(out int workerThreads, out int _);
+                    if (workerThreads == maxWorkerThreads)
+                        break;
+                    Console.Write($"\rWaiting for {ThreadPool.ThreadCount} threads to exit...");
+                    Thread.Sleep(Math.Min(100*ThreadPool.ThreadCount, 1000));
+                }
+
                 var file = new FileInfo("processed.json");
                 Log.Information("Writing to {0}", file.FullName);
                 using (var writer = file.CreateText()) {
@@ -129,7 +137,7 @@ namespace BlenderUmap {
             return lightcomps.Count > 0;
         }
 
-        public static IPackage ExportAndProduceProcessed(string path) {
+        public static IPackage ExportAndProduceProcessed(string path, List<string> loadedLevels) {
             UObject obj = null;
             if (path.EndsWith(".replay")) {
                 // throw new NotSupportedException("replays are not supported by this version of BlenderUmap.");
@@ -164,7 +172,7 @@ namespace BlenderUmap {
                 Log.Information("{0} is not a World, won't try to export", obj.GetPathName());
                 return null;
             }
-
+            loadedLevels.Add(provider.CompactFilePath(world.GetPathName()));
             var persistentLevel = world.PersistentLevel.Load<ULevel>();
             var comps = new JArray();
             var lights = new List<LightInfo2>();
@@ -175,10 +183,40 @@ namespace BlenderUmap {
                 if (actor.ExportType == "LODActor") continue;
                 Log.Information("Loading {0}: {1}/{2} {3}", world.Name, index, persistentLevel.Actors.Length,
                     actorLazy);
-                ProcessActor(actor, lights, comps);
+                ProcessActor(actor, lights, comps, loadedLevels);
 
                 if (index % 100 == 0) { // every 100th actor
                     GC.Collect();
+                }
+            }
+
+            if (config.bExportBuildingFoundations) {
+                foreach (var streamingLevelLazy in world.StreamingLevels) {
+                    UObject streamingLevel = streamingLevelLazy.Load();
+                    if (streamingLevel == null) continue;
+
+                    var children = new JArray();
+                    string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
+                    if (loadedLevels.Contains(text))
+                        continue;
+                    var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'), loadedLevels);
+                    children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
+
+                    var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform", FTransform.Identity);
+
+                    var comp = new JArray {
+                        JValue.CreateNull(), // GUID
+                        streamingLevel.Name,
+                        JValue.CreateNull(), // mesh path
+                        JValue.CreateNull(), // materials
+                        JValue.CreateNull(), // texture data
+                        Vector(transform.Translation), // location
+                        Quat(transform.Rotation), // rotation
+                        Vector(transform.Scale3D), // scale
+                        children,
+                        -1 // Light index
+                    };
+                    comps.Add(comp);
                 }
             }
 
@@ -204,7 +242,7 @@ namespace BlenderUmap {
             return obj.Owner;
         }
 
-        public static void ProcessStreamingGrid(FStructFallback grid, JArray children) {
+        public static void ProcessStreamingGrid(FStructFallback grid, JArray children, List<string> loadedLevels) {
             var tasks = new List<Task>();
             var bagged = new ConcurrentBag<string>();
             if (grid.TryGetValue(out FStructFallback[] gridLevels, "GridLevels")) {
@@ -218,7 +256,7 @@ namespace BlenderUmap {
                                         if (text.SubstringAfterLast("/").StartsWith("HLOD"))
                                             continue;
                                         // GC.Collect();
-                                        var childPackage = ExportAndProduceProcessed(text);
+                                        var childPackage = ExportAndProduceProcessed(text, loadedLevels);
                                         children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
                                         // tasks.Add(Task.Run(() => {
                                         //     var childPackage = ExportAndProduceProcessed(text);
@@ -237,8 +275,10 @@ namespace BlenderUmap {
             // }
         }
 
-        public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps) {
-            if (actor.TryGetValue(out UObject partition, "WorldPartition") && partition.TryGetValue(out UObject runtineHash, "RuntimeHash") && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
+        public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels) {
+            if (actor.TryGetValue(out UObject partition, "WorldPartition")
+                && partition.TryGetValue(out UObject runtineHash, "RuntimeHash")
+                && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
                 FStructFallback grid = null;
                 foreach (var t in streamingGrids) {
                     if (t.TryGetValue(out FName name, "GridName")) {
@@ -251,7 +291,7 @@ namespace BlenderUmap {
                 if (grid == null) return;
 
                 var childrenLevel = new JArray();
-                ProcessStreamingGrid(grid, childrenLevel);
+                ProcessStreamingGrid(grid, childrenLevel, loadedLevels);
                 if (childrenLevel.Count == 0) return;
 
                 // identifiers
@@ -303,9 +343,9 @@ namespace BlenderUmap {
                             if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
                                 break;
                             }
-                        }    
+                        }
                     }
-                    
+
                 }
             }
             // endregion
@@ -356,7 +396,7 @@ namespace BlenderUmap {
                 foreach (var additionalWorld in additionalWorlds) {
                     var text = additionalWorld.AssetPathName.Text;
                     GC.Collect();
-                    var childPackage = ExportAndProduceProcessed(text);
+                    var childPackage = ExportAndProduceProcessed(text, loadedLevels);
                     children.Add(childPackage != null ? provider.CompactFilePath(childPackage.Name) : null);
                 }
             }
@@ -382,35 +422,7 @@ namespace BlenderUmap {
                 LightIndex = lights.Count - 1;
             }
             comp.Add(LightIndex);
-
-
-        /*if (config.bExportBuildingFoundations) {
-            foreach (var streamingLevelLazy in world.StreamingLevels) {
-                UObject streamingLevel = streamingLevelLazy.Load();
-                if (streamingLevel == null) continue;
-
-                var children = new JArray();
-                string text = streamingLevel.GetOrDefault<FSoftObjectPath>("WorldAsset").AssetPathName.Text;
-                var cpkg = ExportAndProduceProcessed(text.SubstringBeforeLast('.'));
-                children.Add(cpkg != null ? provider.CompactFilePath(cpkg.Name) : null);
-
-                var transform = streamingLevel.GetOrDefault<FTransform>("LevelTransform");
-
-                var comp = new JArray {
-                    JValue.CreateNull(), // GUID
-                    streamingLevel.Name,
-                    JValue.CreateNull(), // mesh path
-                    JValue.CreateNull(), // materials
-                    JValue.CreateNull(), // texture data
-                    Vector(transform.Translation), // location
-                    Quat(transform.Rotation), // rotation
-                    Vector(transform.Scale3D), // scale
-                    children
-                };
-                comps.Add(comp);
-            }
-        }*/
-    }
+        }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
             if (index != null) {
