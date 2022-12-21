@@ -164,12 +164,17 @@ class VIEW3D_MT_AdditionalOptions(bpy.types.Menu):
         col.operator("umap.fillfortnitekeys", depress=False)
         col.operator("umap.downloadmappings", depress=False)
 
+try:
+    from .__version__ import __version__
+    version = ".".join(__version__.split(".")[:2])
+except:
+    version = "0"
 
 # UI
 class VIEW3D_PT_Import(bpy.types.Panel):
     """Creates a Panel in Properties(N)"""
 
-    bl_label = "BlenderUmap"
+    bl_label = f"BlenderUmap2 (v{version})"
     bl_idname = "VIEW3D_PT_Umap"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -177,7 +182,7 @@ class VIEW3D_PT_Import(bpy.types.Panel):
     bl_context = "objectmode"
 
     bpy.types.Scene.ue4_versions = bpy.props.EnumProperty(
-        name="UE4 Version", items=UE4Version.Versions
+        name="UE Version", items=UE4Version.Versions
     )
 
     def draw(self, context):
