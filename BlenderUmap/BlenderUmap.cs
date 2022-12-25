@@ -195,7 +195,7 @@ namespace BlenderUmap {
                     GC.Collect();
                 }
             }
-            
+
             if (config.bExportBuildingFoundations) {
                 foreach (var streamingLevelLazy in world.StreamingLevels) {
                     UObject streamingLevel = streamingLevelLazy.Load();
@@ -344,6 +344,15 @@ namespace BlenderUmap {
                                     break;
                                 }
                             }
+                        if (mesh == null) {
+                            // look in parent struct if not found
+                            var super = actorBlueprint.SuperStruct.Load<UBlueprintGeneratedClass>();
+                            foreach (var actorExp in super.Owner.GetExports()) {
+                                if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                    break;
+                                }
+                            }
+                        }
                     }
             }
             // endregion
