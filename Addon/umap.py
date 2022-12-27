@@ -50,9 +50,6 @@ def import_umap(processed_map_path: str,
         if len(name) > 50:
             name = name[:40] + f"_{abs(string_hash_code(name)):08x}"
 
-        if name.startswith("RVT_Decal"):
-            continue
-
         print("\nActor %d of %d: %s" % (comp_i + 1, len(comps), name))
 
         def apply_ob_props(ob: bpy.types.Object, new_name: str = name) -> bpy.types.Object:

@@ -90,12 +90,12 @@ namespace BlenderUmap {
                 if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
 
                 ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int _);
-                while (ThreadPool.ThreadCount != 1) {
+                while (true) {
                     ThreadPool.GetAvailableThreads(out int workerThreads, out int _);
                     if (workerThreads == maxWorkerThreads)
                         break;
-                    Console.Write($"\rWaiting for {ThreadPool.ThreadCount} threads to exit...");
-                    Thread.Sleep(Math.Min(100*ThreadPool.ThreadCount, 1000));
+                    Console.Write($"\rWaiting for {maxWorkerThreads-workerThreads} threads to exit...");
+                    Thread.Sleep(1000);
                 }
 
                 var file = new FileInfo("processed.json");

@@ -95,6 +95,15 @@ public static class ReplayExporter
                                 break;
                             }
                         }
+                        if (mesh == null) {
+                            // look in parent struct if not found
+                            var super = ab.SuperStruct.Load<UBlueprintGeneratedClass>();
+                            foreach (var actorExp in super.Owner.GetExports()) {
+                                if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
                 if (mesh == null || mesh.IsNull) continue;
