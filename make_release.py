@@ -17,7 +17,7 @@ version = f"{major}.{minor}"
 print(f"version: {version}")
 
 version_f = StringIO()
-version_f.write(f"__version__ = '{version}.'\n")
+version_f.write(f"__version__ = '{version}'\n")
 version_f.write(f"branch = '{branch}'")
 
 def add_files_to_zip(zip_file: zipfile.ZipFile, pattern, prefix=''):
