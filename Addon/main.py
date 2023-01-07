@@ -390,7 +390,7 @@ class FortniteMappings(bpy.types.Operator):
         return True
 
     def dl_mappings(self, path):
-        ENDPOINT = "https://fortnitecentral.gmatrixgames.ga/api/v1/mappings"
+        ENDPOINT = "https://fortnitecentral.genxgames.gg/api/v1/mappings"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36",
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -398,19 +398,35 @@ class FortniteMappings(bpy.types.Operator):
 
         req = Request(url=ENDPOINT, headers=headers)
         r = urlopen(req)
-        data = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
+        datas = json.loads(r.read().decode(r.info().get_param("charset") or "utf-8"))
 
-        if not os.path.exists(os.path.join(path, data[0]["fileName"])):
-            with open(os.path.join(path, data[0]["fileName"]), "wb") as f:
-                downfile = urlopen(Request(url=data[0]["url"], headers=headers))
-                print("Downloading", data[0]["fileName"])
+        if r.status != 200:
+            self.report({"ERROR"}, "API returned {r.status} status code")
+            return {"CANCELLED"}
+
+        if len(datas) == 0:
+            self.report({"ERROR"}, "no mappings found in response")
+            return {"CANCELLED"}
+
+        data = datas[0]
+        for data_ in datas:
+            if data_["meta"]["platform"] == "Android":
+                data = data_
+                break
+
+        import hashlib
+        filepath = os.path.join(path, data["fileName"])
+        if not os.path.exists(filepath) or data["hash"] != hashlib.sha1(open(filepath, "rb").read()).hexdigest():
+            with open(filepath, "wb") as f:
+                downfile = urlopen(Request(url=data["url"], headers=headers))
+                print("Downloading", data["fileName"])
                 f.write(downfile.read(downfile.length))
         return True
 
 
 class ListItem(bpy.types.PropertyGroup):
     pakname: StringProperty(
-        name="Pak Name", description="Name of the Pak file.", default=""
+        name="Pak Name", description="Name of the Pak file. (Optional)", default=""
     )
     daeskey: StringProperty(
         name="AES Key", description="AES key for the Pak file.", default=""
