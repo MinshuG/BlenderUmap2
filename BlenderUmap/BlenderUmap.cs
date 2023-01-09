@@ -37,6 +37,12 @@ namespace BlenderUmap {
         public static Config config;
         public static MyFileProvider provider;
         private static readonly long start = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+#if DEBUG
+        private static readonly bool NoExport = false;
+#else
+        private static readonly bool NoExport = false;
+#endif
+        public static uint ThreadWorkCount = 0;
 
         public static void Main(string[] args) {
             Log.Logger = new LoggerConfiguration()
@@ -83,14 +89,11 @@ namespace BlenderUmap {
                 var pkg = ExportAndProduceProcessed(config.ExportPackage, new List<string>());
                 if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
 
-                ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int _);
-                while (ThreadPool.ThreadCount != 1) {
-                    ThreadPool.GetAvailableThreads(out int workerThreads, out int _);
-                    if (workerThreads == maxWorkerThreads)
-                        break;
-                    Console.Write($"\rWaiting for {ThreadPool.ThreadCount} threads to exit...");
-                    Thread.Sleep(Math.Min(100*ThreadPool.ThreadCount, 1000));
+                while (ThreadWorkCount > 0) {
+                    Console.Write($"\rWaiting for {ThreadWorkCount} threads to exit...");
+                    Thread.Sleep(1000);
                 }
+                Console.WriteLine();
 
                 var file = new FileInfo("processed.json");
                 Log.Information("Writing to {0}", file.FullName);
@@ -434,38 +437,37 @@ namespace BlenderUmap {
         }
 
         private static void ExportTexture(FPackageIndex index) {
-            try {
-                var obj = index.Load();
-                if (obj is not UTexture2D texture) {
-                    return;
+            if (NoExport) return;
+            var obj = index.Load();
+            if (obj is not UTexture2D texture) {
+                return;
+            }
+
+            char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
+            var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
+
+            if (output.Exists) {
+                Log.Debug("Texture already exists, skipping: {0}", output.FullName);
+            } else {
+                if (fourCC != null) {
+                    throw new NotImplementedException("DDS export is not implemented");
                 }
 
-                char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
-                var output = new FileInfo(Path.Combine(GetExportDir(texture).ToString(), texture.Name + (fourCC != null ? ".dds" : ".png")));
-
-                if (output.Exists) {
-                    Log.Debug("Texture already exists, skipping: {0}", output.FullName);
-                } else {
-                    if (fourCC != null) {
-                        throw new NotImplementedException("DDS export is not implemented");
-                    }
-
-                    ThreadPool.QueueUserWorkItem(_ => {
-                        Log.Information("Saving texture to {0}", output.FullName);
-                        // CUE4Parse only reads the first FTexturePlatformData and drops the rest
+                ThreadPool.QueueUserWorkItem(_ => {
+                    Interlocked.Increment(ref ThreadWorkCount);
+                    Log.Information("Saving texture to {0}", output.FullName);
+                    // CUE4Parse only reads the first FTexturePlatformData and drops the rest
+                    try {
                         var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                         using var image = texture.Decode(firstMip);
-
                         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                        try {
-                            using var stream = output.OpenWrite();
-                            data.SaveTo(stream);
-                        }
-                        catch (IOException) { } // two threads trying to write same texture
-                    });
-                }
-            } catch (Exception e) {
-                Log.Warning(e, "Failed to save texture");
+                        using var stream = output.OpenWrite();
+                        data.SaveTo(stream);
+                        Interlocked.Decrement(ref ThreadWorkCount);
+                    }
+                    catch (IOException) { Interlocked.Decrement(ref ThreadWorkCount); } // two threads trying to write same texture
+                    catch (Exception e) { Log.Warning(e, "Failed to save texture"); Interlocked.Decrement(ref ThreadWorkCount); }
+                });
             }
         }
 
@@ -477,19 +479,22 @@ namespace BlenderUmap {
             if (!output.Exists) {
                 ThreadPool.QueueUserWorkItem(_ => {
                     if (!output.Exists) {
-                        Log.Information("Saving mesh to {0}", output.FullName);
-                        var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
-                        if (exporter.MeshLods.Count == 0) {
-                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                            return;
-                        }
-
                         try {
+                            Interlocked.Increment(ref ThreadWorkCount);
+                            Log.Information("Saving mesh to {0}", output.FullName);
+                            var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
+                            if (exporter.MeshLods.Count == 0) {
+                                Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                                Interlocked.Decrement(ref ThreadWorkCount);
+                                return;
+                            }
                             var stream = output.OpenWrite();
                             stream.Write(exporter.MeshLods.First().FileData);
                             stream.Close();
+                            Interlocked.Decrement(ref ThreadWorkCount);
                         }
-                        catch (IOException) { } // two threads trying to write same mesh
+                        catch (IOException) { Interlocked.Decrement(ref ThreadWorkCount); } // two threads trying to write same mesh
+                        catch (Exception e) { Log.Warning(e, "Failed to save mesh"); Interlocked.Decrement(ref ThreadWorkCount); }
                     }
                 });
             }
