@@ -26,7 +26,7 @@ namespace BlenderUmap {
         private readonly Cache _cache;
         private readonly bool _bDumpAssets;
 
-        public MyFileProvider(string folder, EGame game, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, new VersionContainer(game)) {
+        public MyFileProvider(string folder, VersionContainer version, List<EncryptionKey> encryptionKeys, bool bDumpAssets, int cacheSize) : base(folder, SearchOption.AllDirectories, true, version) {
             _cache = new Cache(cacheSize);
             _bDumpAssets = bDumpAssets;
 

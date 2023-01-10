@@ -4,7 +4,7 @@ using Newtonsoft.Json;
 
 namespace BlenderUmap;
 
-public class LightComponent: UObject {
+public class ULightComponent: UObject {
     protected override void WriteJson(JsonWriter writer, JsonSerializer serializer) {
         base.WriteJson(writer, serializer);
 #if DEBUG
@@ -12,10 +12,10 @@ public class LightComponent: UObject {
         serializer.Serialize(writer, GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator).GetNormalized().Quaternion());
 #endif
         writer.WritePropertyName("RelativeRotation");
-        serializer.Serialize(writer, GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator).GetNormalized());
+        serializer.Serialize(writer, GetOrDefault<FRotator>("RelativeRotation", this is not URectLightComponent ? new FRotator(-90,0,0): FRotator.ZeroRotator));
     }
 }
 
-public class SpotLightComponent: LightComponent { }
-
-public class PointLightComponent: LightComponent { }
+public class USpotLightComponent: ULightComponent { }
+public class UPointLightComponent: ULightComponent { }
+public class URectLightComponent: ULightComponent { }

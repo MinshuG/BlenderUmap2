@@ -74,9 +74,9 @@ namespace BlenderUmap {
                     throw new MainException("Please specify ExportPackage.");
                 }
 
-                ObjectTypeRegistry.RegisterEngine(typeof(SpotLightComponent).Assembly);
+                ObjectTypeRegistry.RegisterEngine(typeof(USpotLightComponent).Assembly);
 
-                provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
+                provider = new MyFileProvider(paksDir, new VersionContainer(config.Game, optionOverrides: config.OptionsOverrides), config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
                 provider.LoadVirtualPaths();
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
@@ -129,12 +129,12 @@ namespace BlenderUmap {
             return chosenFile;
         }
 
-        public static bool CheckIfHasLights(IPackage actorPackage, out List<UObject> lightcomps) {
-            lightcomps = new List<UObject>();
+        public static bool CheckIfHasLights(IPackage actorPackage, out List<ULightComponent> lightcomps) {
+            lightcomps = new List<ULightComponent>();
             if (actorPackage == null) return false;
             foreach (var export in actorPackage.GetExports()) {
-                if (export is LightComponent) {
-                    lightcomps.Add(export);
+                if (export is ULightComponent lightComponent) {
+                    lightcomps.Add(lightComponent);
                 }
             }
             return lightcomps.Count > 0;
@@ -217,7 +217,7 @@ namespace BlenderUmap {
                         Quat(transform.Rotation), // rotation
                         Vector(transform.Scale3D), // scale
                         children,
-                        -1 // Light index
+                        0 // Light index
                     };
                     comps.Add(comp);
                 }
@@ -279,6 +279,35 @@ namespace BlenderUmap {
         }
 
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels) {
+            if (actor is ALight) {
+                var lightcomp = actor.GetOrDefault<ULightComponent>("LightComponent", null);
+                if (lightcomp is not null) {
+                    // unused
+                    var lloc = lightcomp.GetOrDefault<FVector>("RelativeLocation");
+                    var lrot = lightcomp.GetOrDefault<FRotator>("RelativeRotation", new FRotator(-90,0,0)); // actor is ARectLight ? new FRotator(-90,0,0) :
+                    var lscale = lightcomp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+                    var lightInfo2 = new LightInfo2 {
+                        Props = new []{ lightcomp } // TODO: Support InstanceComponents
+                    };
+                    lights.Add(lightInfo2);
+
+                    var lcomp = new JArray {
+                        JValue.CreateNull(), // GUID
+                        actor.Name,
+                        JValue.CreateNull(), // mesh path
+                        JValue.CreateNull(), // materials
+                        JValue.CreateNull(), // texture data
+                        Vector(lloc), // location
+                        Rotator(lrot), // rotation
+                        Vector(lscale), // scale
+                        JValue.CreateNull(),
+                        -lights.Count // 0 -> no light -ve -> light no parent, +ve light with parent (BP actors only?) | so actual light index is abs(LightIndex)-1
+                    };
+                    comps.Add(lcomp);
+                }
+
+                return;
+            }
             if (actor.TryGetValue(out UObject partition, "WorldPartition")
                 && partition.TryGetValue(out UObject runtineHash, "RuntimeHash")
                 && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
@@ -309,7 +338,7 @@ namespace BlenderUmap {
                 streamComp.Add(Rotator(new FRotator()));
                 streamComp.Add(Vector(FVector.OneVector));
                 streamComp.Add(childrenLevel);
-                streamComp.Add(-1); // LightIndex
+                streamComp.Add(0); // LightIndex
                 return;
             }
 
@@ -416,13 +445,13 @@ namespace BlenderUmap {
             comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
             comp.Add(children);
 
-            int LightIndex = -1;
+            int LightIndex = 0;
             if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
                 var infor = new LightInfo2() {
                     Props = lightinfo.ToArray()
                 };
                 lights.Add(infor);
-                LightIndex = lights.Count - 1;
+                LightIndex = lights.Count;
             }
             comp.Add(LightIndex);
         }
@@ -644,6 +673,7 @@ namespace BlenderUmap {
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
                     foreach (var textureParameterValue in textureParameterValues) {
+                        // ReSharper disable once ConditionIsAlwaysTrueOrFalse
                         if (textureParameterValue.ParameterInfo == null) continue;
                         var name = textureParameterValue.ParameterInfo.Name;
                         if (!name.IsNone) {
@@ -733,6 +763,7 @@ namespace BlenderUmap {
         public string PaksDirectory = "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Content\\Paks";
         [JsonProperty("UEVersion")]
         public EGame Game = EGame.GAME_UE4_LATEST;
+        public Dictionary<string, bool> OptionsOverrides = new Dictionary<string, bool>();
         public List<EncryptionKey> EncryptionKeys = new();
         public bool bDumpAssets = false;
         public int ObjectCacheSize = 100;
@@ -783,22 +814,8 @@ namespace BlenderUmap {
     }
 
     public class LightInfo2 {
-        public UObject[] Props;
+        public ULightComponent[] Props;
     }
-
-    // public class LightInfo {
-    //     public string Type;
-    //     public float Intensity;
-    //     public FVector Location;
-    //     public FRotator Rotation;
-    //     public FLinearColor Color;
-    //     public bool isCandelas = false;
-    // }
-    //
-    // public class SpotLightInfo : LightInfo {
-    //     public float OuterConeAngle = 90;
-    //     public float InnerConeAngle = 0;
-    // }
 
     public class MainException : Exception {
         public MainException(string message) : base(message) { }

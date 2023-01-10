@@ -44,7 +44,7 @@ def import_umap(processed_map_path: str,
         rotation = comp[6] or [0, 0, 0]
         scale = comp[7] or [1, 1, 1]
         child_comps = comp[8]
-        light_index = comp[9] if blights_exist else -1
+        light_index = comp[9] if blights_exist else 0
 
         # if light_index == -1:
         #     continue
@@ -67,10 +67,15 @@ def import_umap(processed_map_path: str,
             bpy.context.collection.objects.link(ob)
             bpy.context.view_layer.objects.active = ob
 
-            if light_index != -1:
-                for light in lights[light_index]["Props"]:
+            if light_index > 0: # greater than zero
+                for light in lights[light_index-1]["Props"]:
                     l = create_light(light, map_collection)
                     l.parent = ob
+
+        if light_index < 0:
+            for light in lights[abs(light_index)-1]["Props"]:
+                create_light(light, map_collection)
+            continue
 
         if child_comps and len(child_comps) > 0:
             for i, child_comp in enumerate(child_comps):
@@ -118,7 +123,7 @@ def import_umap(processed_map_path: str,
             imported.data.name = key
             bpy.ops.object.shade_smooth()
 
-            if light_index != -1:
+            if light_index > 0:
                 for light in lights[light_index]["Props"]:
                     l = create_light(light, map_collection)
                     l.parent = imported
