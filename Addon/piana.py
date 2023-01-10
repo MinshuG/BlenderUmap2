@@ -107,7 +107,6 @@ def create_light(object_data, lights_collection):
     light_type = get_light_type(object_data)
     light_name = object_data["Outer"]
     light_props = object_data["Properties"]
-    print(light_name, object_data['Properties']['RelativeRotation'])
 
     light_intensity = 0
     if "Intensity" in light_props:
