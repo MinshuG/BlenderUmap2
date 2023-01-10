@@ -75,9 +75,9 @@ namespace BlenderUmap {
                     throw new MainException("Please specify ExportPackage.");
                 }
 
-                ObjectTypeRegistry.RegisterEngine(typeof(SpotLightComponent).Assembly);
+                ObjectTypeRegistry.RegisterEngine(typeof(USpotLightComponent).Assembly);
 
-                provider = new MyFileProvider(paksDir, config.Game, config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
+                provider = new MyFileProvider(paksDir, new VersionContainer(config.Game, optionOverrides: config.OptionsOverrides), config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
                 provider.LoadVirtualPaths();
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
@@ -130,12 +130,12 @@ namespace BlenderUmap {
             return chosenFile;
         }
 
-        public static bool CheckIfHasLights(IPackage actorPackage, out List<UObject> lightcomps) {
-            lightcomps = new List<UObject>();
+        public static bool CheckIfHasLights(IPackage actorPackage, out List<ULightComponent> lightcomps) {
+            lightcomps = new List<ULightComponent>();
             if (actorPackage == null) return false;
             foreach (var export in actorPackage.GetExports()) {
-                if (export is LightComponent) {
-                    lightcomps.Add(export);
+                if (export is ULightComponent lightComponent) {
+                    lightcomps.Add(lightComponent);
                 }
             }
             return lightcomps.Count > 0;
@@ -218,7 +218,7 @@ namespace BlenderUmap {
                         Quat(transform.Rotation), // rotation
                         Vector(transform.Scale3D), // scale
                         children,
-                        -1 // Light index
+                        0 // Light index
                     };
                     comps.Add(comp);
                 }
@@ -281,6 +281,35 @@ namespace BlenderUmap {
         }
 
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels) {
+            if (actor is ALight) {
+                var lightcomp = actor.GetOrDefault<ULightComponent>("LightComponent", null);
+                if (lightcomp is not null) {
+                    // unused
+                    var lloc = lightcomp.GetOrDefault<FVector>("RelativeLocation");
+                    var lrot = lightcomp.GetOrDefault<FRotator>("RelativeRotation", new FRotator(-90,0,0)); // actor is ARectLight ? new FRotator(-90,0,0) :
+                    var lscale = lightcomp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+                    var lightInfo2 = new LightInfo2 {
+                        Props = new []{ lightcomp } // TODO: Support InstanceComponents 
+                    };
+                    lights.Add(lightInfo2);
+
+                    var lcomp = new JArray {
+                        JValue.CreateNull(), // GUID
+                        actor.Name,
+                        JValue.CreateNull(), // mesh path
+                        JValue.CreateNull(), // materials
+                        JValue.CreateNull(), // texture data
+                        Vector(lloc), // location
+                        Rotator(lrot), // rotation
+                        Vector(lscale), // scale
+                        JValue.CreateNull(),
+                        -lights.Count // 0 -> no light -ve -> light no parent, +ve light with parent (BP actors only?) | so actual light index is abs(LightIndex)-1
+                    };
+                    comps.Add(lcomp);
+                }
+                
+                return;
+            }
             if (actor.TryGetValue(out UObject partition, "WorldPartition")
                 && partition.TryGetValue(out UObject runtineHash, "RuntimeHash")
                 && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
@@ -311,7 +340,7 @@ namespace BlenderUmap {
                 streamComp.Add(Rotator(new FRotator()));
                 streamComp.Add(Vector(FVector.OneVector));
                 streamComp.Add(childrenLevel);
-                streamComp.Add(-1); // LightIndex
+                streamComp.Add(0); // LightIndex
                 return;
             }
 
@@ -424,13 +453,13 @@ namespace BlenderUmap {
             comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
             comp.Add(children);
 
-            int LightIndex = -1;
+            int LightIndex = 0;
             if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
                 var infor = new LightInfo2() {
                     Props = lightinfo.ToArray()
                 };
                 lights.Add(infor);
-                LightIndex = lights.Count - 1;
+                LightIndex = lights.Count;
             }
             comp.Add(LightIndex);
         }
@@ -604,9 +633,9 @@ namespace BlenderUmap {
             public ResolvedObject Material;
             public string ShaderName;
 
-            private readonly Dictionary<string, FPackageIndex> TextureParameterValues = new();
-            private readonly Dictionary<string, float> ScalarParameterValues = new();
-            private readonly Dictionary<string, string> VectorParameterValues = new(); // hex
+            private readonly Dictionary<string, FPackageIndex> _textureParameterValues = new();
+            private readonly Dictionary<string, float> _scalarParameterValues = new();
+            private readonly Dictionary<string, string> _vectorParameterValues = new(); // hex
 
 
             public Mat(ResolvedObject material) {
@@ -637,8 +666,8 @@ namespace BlenderUmap {
                     if (text is FExpressionInput materialInput) {
                         var expression = obj.Owner!.GetExportOrNull(materialInput.ExpressionName.ToString());
                         if (expression != null && expression.TryGetValue(out FPackageIndex texture, "Texture")) {
-                            if (!TextureParameterValues.ContainsKey(propertyTag.Name.ToString())) {
-                                TextureParameterValues[propertyTag.Name.ToString()] = texture;
+                            if (!_textureParameterValues.ContainsKey(propertyTag.Name.ToString())) {
+                                _textureParameterValues[propertyTag.Name.ToString()] = texture;
                             }
                         }
                     }
@@ -648,8 +677,8 @@ namespace BlenderUmap {
                     foreach (var export in exports) {
                         if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
                             if (export.TryGetValue(out FPackageIndex parameterValue, "Texture")) {
-                                if (!TextureParameterValues.ContainsKey(name.Text)) {
-                                    TextureParameterValues[name.Text] = parameterValue;
+                                if (!_textureParameterValues.ContainsKey(name.Text)) {
+                                    _textureParameterValues[name.Text] = parameterValue;
                                 }
                             }
                         }
@@ -663,12 +692,13 @@ namespace BlenderUmap {
                     material.GetOrDefault<List<FTextureParameterValue>>("TextureParameterValues");
                 if (textureParameterValues != null) {
                     foreach (var textureParameterValue in textureParameterValues) {
+                        // ReSharper disable once ConditionIsAlwaysTrueOrFalse
                         if (textureParameterValue.ParameterInfo == null) continue;
                         var name = textureParameterValue.ParameterInfo.Name;
                         if (!name.IsNone) {
                             var parameterValue = textureParameterValue.ParameterValue;
-                            if (!TextureParameterValues.ContainsKey(name.Text)) {
-                                TextureParameterValues[name.Text] = parameterValue;
+                            if (!_textureParameterValues.ContainsKey(name.Text)) {
+                                _textureParameterValues[name.Text] = parameterValue;
                             }
                         }
                     }
@@ -679,17 +709,17 @@ namespace BlenderUmap {
                 var scalerParameterValues =
                     material.GetOrDefault<List<FScalarParameterValue>>("ScalarParameterValues", new List<FScalarParameterValue>());
                 foreach (var scalerParameterValue in scalerParameterValues) {
-                    if (!ScalarParameterValues.ContainsKey(scalerParameterValue.Name))
-                        ScalarParameterValues[scalerParameterValue.Name] = scalerParameterValue.ParameterValue;
+                    if (!_scalarParameterValues.ContainsKey(scalerParameterValue.Name))
+                        _scalarParameterValues[scalerParameterValue.Name] = scalerParameterValue.ParameterValue;
                 }
                 #endregion
 
                 #region Vector
                 var vectorParameterValues = material.GetOrDefault<List<FVectorParameterValue>>("VectorParameterValues", new List<FVectorParameterValue>());
                 foreach (var vectorParameterValue in vectorParameterValues) {
-                    if (!VectorParameterValues.ContainsKey(vectorParameterValue.Name)) {
+                    if (!_vectorParameterValues.ContainsKey(vectorParameterValue.Name)) {
                         if (vectorParameterValue.ParameterValue != null)
-                            VectorParameterValues[vectorParameterValue.Name] = vectorParameterValue.ParameterValue.Value.ToSRGB().ToString();
+                            _vectorParameterValues[vectorParameterValue.Name] = vectorParameterValue.ParameterValue.Value.ToSRGB().ToString();
                     }
                 }
                 #endregion
@@ -715,7 +745,7 @@ namespace BlenderUmap {
                 }
 
                 var textArray = new JObject();
-                foreach (var text in TextureParameterValues) {
+                foreach (var text in _textureParameterValues) {
                     if (mergedOverrides.ContainsKey(text.Key)) {
                         textArray[text.Key] = mergedOverrides[text.Key];
                         continue;
@@ -733,12 +763,8 @@ namespace BlenderUmap {
                     }
                 }
 
-                var scalerArray = JObject.FromObject(ScalarParameterValues);
-                var vectorArray = JObject.FromObject(VectorParameterValues);
-
-                // foreach (var val in VectorParameterValues) {
-                //     scaler_array[val.Key] = val.Value;
-                // }
+                var scalerArray = JObject.FromObject(_scalarParameterValues);
+                var vectorArray = JObject.FromObject(_vectorParameterValues);
 
                 if (!obj.ContainsKey(PackageIndexToDirPath(Material))) {
                     var combinedParams = new JObject();
@@ -761,6 +787,7 @@ namespace BlenderUmap {
         public string PaksDirectory = "C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Content\\Paks";
         [JsonProperty("UEVersion")]
         public EGame Game = EGame.GAME_UE4_LATEST;
+        public Dictionary<string, bool> OptionsOverrides = new Dictionary<string, bool>();
         public List<EncryptionKey> EncryptionKeys = new();
         public bool bDumpAssets = false;
         public int ObjectCacheSize = 100;
@@ -811,22 +838,8 @@ namespace BlenderUmap {
     }
 
     public class LightInfo2 {
-        public UObject[] Props;
+        public ULightComponent[] Props;
     }
-
-    // public class LightInfo {
-    //     public string Type;
-    //     public float Intensity;
-    //     public FVector Location;
-    //     public FRotator Rotation;
-    //     public FLinearColor Color;
-    //     public bool isCandelas = false;
-    // }
-    //
-    // public class SpotLightInfo : LightInfo {
-    //     public float OuterConeAngle = 90;
-    //     public float InnerConeAngle = 0;
-    // }
 
     public class MainException : Exception {
         public MainException(string message) : base(message) { }
