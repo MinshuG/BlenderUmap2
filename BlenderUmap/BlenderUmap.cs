@@ -288,6 +288,7 @@ namespace BlenderUmap {
                     var lloc = lightcomp.GetOrDefault<FVector>("RelativeLocation");
                     var lrot = lightcomp.GetOrDefault<FRotator>("RelativeRotation", new FRotator(-90,0,0)); // actor is ARectLight ? new FRotator(-90,0,0) :
                     var lscale = lightcomp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+                    
                     var lightInfo2 = new LightInfo2 {
                         Props = new []{ lightcomp } // TODO: Support InstanceComponents 
                     };

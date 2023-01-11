@@ -12,9 +12,11 @@ using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.Utils;
 using FortniteReplayReader;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using Serilog.Extensions.Logging;
 using Unreal.Core.Models.Enums;
 
 namespace BlenderUmap.Extensions;
@@ -40,17 +42,17 @@ public class NullPackage : AbstractUePackage {
     }
 }
 
-public static class ReplayExporter
+public class ReplayExporter
 {
     public static IPackage ExportAndProduceProcessed(string obj, MyFileProvider provider) {
             var comps = new JArray();
-            var rr = new ReplayReader(null, ParseMode.Full);
+
+            var rr = new ReplayReader(new Logger<ReplayExporter>(new SerilogLoggerFactory()), ParseMode.Full);
 
             try {
                 var replay = rr.ReadReplay(File.OpenRead(obj));
             }
             catch (Exception e) {
-                //Console.WriteLine(e);
                 throw new ParserException("corrupted or unsupported replay file", e);
             }
 
@@ -165,7 +167,7 @@ public static class ReplayExporter
                 comp.Add(Vector(actor.Scale));
                 comp.Add(children);
 
-                int LightIndex = -1;
+                int LightIndex = 0;
                 if (Program.CheckIfHasLights(ac.Owner, out var lightinfo)) {
                     var infor = new LightInfo2() {
                         Props = lightinfo.ToArray()
@@ -173,7 +175,7 @@ public static class ReplayExporter
                     // X               Y                 Z
                     // rotator.Roll2, -rotator.Pitch0, -rotator.Yaw1
                     lights.Add(infor);
-                    LightIndex = lights.Count - 1;
+                    LightIndex = lights.Count;
                 }
                 comp.Add(LightIndex);
             }
