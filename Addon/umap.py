@@ -122,7 +122,7 @@ def import_umap(processed_map_path: str,
             bpy.ops.object.shade_smooth()
 
             if light_index > 0:
-                for light in lights[light_index]["Props"]:
+                for light in lights[light_index-1]["Props"]:
                     l = create_light(light, map_collection)
                     l.parent = imported
 
