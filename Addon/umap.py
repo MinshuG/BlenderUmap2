@@ -195,7 +195,7 @@ def import_material(ob: bpy.types.Object,
                 offset -= 40
 
         for input_name, value in material_info["ScalerParams"].items():
-            if input_name not in shader_node.inputs:
+            if input_name not in shader_node.inputs or shader_node.inputs[input_name].bl_idname != "NodeSocketFloat":
                 continue
             shader_node.inputs[input_name].default_value = value
 
@@ -217,10 +217,6 @@ def import_material(ob: bpy.types.Object,
         ob.data.materials[found_index] = m
 
     return m
-
-def hex_to_rgb(hex_): # ARGB
-    hex_ = "ff" + hex_ if len(hex_) == 6 else hex_
-    return tuple(int(hex_[i:i+2], 16)/255 for i in (2, 4, 6, 0))
 
 def create_node_group(name, texture_inputs, scaler_inputs, vector_inputs):
         group = bpy.data.node_groups.get(name)

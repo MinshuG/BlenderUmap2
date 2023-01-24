@@ -185,3 +185,7 @@ def srgb2lin(s):
     else:
         lin = pow(((s + 0.055) / 1.055), 2.4)
     return lin
+
+def hex_to_rgb(hex_): # ARGB
+    hex_ = "ff" + hex_ if len(hex_) == 6 else hex_
+    return tuple(int(hex_[i:i+2], 16)/255 for i in (2, 4, 6, 0))

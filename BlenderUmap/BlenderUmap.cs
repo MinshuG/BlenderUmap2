@@ -43,7 +43,7 @@ namespace BlenderUmap {
 #else
         private static readonly bool NoExport = false;
 #endif
-        public static uint ThreadWorkCount = 0; 
+        public static uint ThreadWorkCount = 0;
 
         public static void Main(string[] args) {
             Log.Logger = new LoggerConfiguration()
@@ -288,9 +288,9 @@ namespace BlenderUmap {
                     var lloc = lightcomp.GetOrDefault<FVector>("RelativeLocation");
                     var lrot = lightcomp.GetOrDefault<FRotator>("RelativeRotation", new FRotator(-90,0,0)); // actor is ARectLight ? new FRotator(-90,0,0) :
                     var lscale = lightcomp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
-                    
+
                     var lightInfo2 = new LightInfo2 {
-                        Props = new []{ lightcomp } // TODO: Support InstanceComponents 
+                        Props = new []{ lightcomp } // TODO: Support InstanceComponents
                     };
                     lights.Add(lightInfo2);
 
@@ -308,7 +308,7 @@ namespace BlenderUmap {
                     };
                     comps.Add(lcomp);
                 }
-                
+
                 return;
             }
             if (actor.TryGetValue(out UObject partition, "WorldPartition")
@@ -375,11 +375,13 @@ namespace BlenderUmap {
                         if (mesh == null) {
                             // look in parent struct if not found
                             var super = actorBlueprint.SuperStruct.Load<UBlueprintGeneratedClass>();
-                            foreach (var actorExp in super.Owner.GetExports()) {
-                                if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
-                                    break;
+                            if (super != null)
+                                foreach (var actorExp in super.Owner.GetExports()!) {
+                                    if (actorExp.ExportType != "FortKillVolume_C" &&
+                                        (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                        break;
+                                    }
                                 }
-                            }
                         }
                     }
             }
@@ -419,7 +421,7 @@ namespace BlenderUmap {
 
                 for (int i = 0; i < materials.Count; i++) {
                     var mat = materials[i];
-                    if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
+                    if (overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
                         // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
                         mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
                     }
@@ -632,7 +634,7 @@ namespace BlenderUmap {
 
         public class Mat {
             public ResolvedObject Material;
-            public string ShaderName;
+            public string ShaderName = "None";
 
             private readonly Dictionary<string, FPackageIndex> _textureParameterValues = new();
             private readonly Dictionary<string, float> _scalarParameterValues = new();
@@ -654,9 +656,6 @@ namespace BlenderUmap {
 
                 if (obj is UMaterial uMaterial) {
                     ShaderName = obj.Name;
-                    // var x = new CMaterialParams2();
-                    // uMaterial.GetParams(x);
-                    // var asd = ShaderName.Length;
                 }
 
                 #region PossiblyOldFormat
@@ -674,13 +673,32 @@ namespace BlenderUmap {
                     }
                 }
 
+                string[] TEXTURES = new [] {"MaterialExpressionTextureObjectParameter", "MaterialExpressionTextureSampleParameter2D"};
+                string[] VECTORS = new [] {"MaterialExpressionVectorParameter"};
+                string[] BOOLS = new [] {"MaterialExpressionStaticBoolParameter"};
+                string[] SCALERS = new [] {"MaterialExpressionScalarParameter"};
+
                 if (material.TryGetValue(out UObject[] exports, "Expressions")) {
                     foreach (var export in exports) {
-                        if (export != null && export.ExportType == "MaterialExpressionTextureSampleParameter2D" && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
-                            if (export.TryGetValue(out FPackageIndex parameterValue, "Texture")) {
-                                if (!_textureParameterValues.ContainsKey(name.Text)) {
-                                    _textureParameterValues[name.Text] = parameterValue;
-                                }
+                        if (export != null && export.TryGetValue(out FName name, "ParameterName") && !name.IsNone) {
+                            if (TEXTURES.Contains(export.ExportType)) {
+                                if (export.TryGetValue(out FPackageIndex parameterValue, "Texture"))
+                                    if (!_textureParameterValues.ContainsKey(name.Text))
+                                        _textureParameterValues[name.Text] = parameterValue;
+                            }
+                            if (VECTORS.Contains(export.ExportType)) {
+                                if (export.TryGetValue(out FLinearColor color, "DefaultValue"))
+                                    if (!_vectorParameterValues.ContainsKey(name.Text))
+                                        _vectorParameterValues[name.Text] = color.ToSRGB().ToString();
+                            }
+                            if (BOOLS.Contains(export.ExportType)) {
+                                if (export.TryGetValue(out bool val, "DefaultValue"))
+                                    if (!_scalarParameterValues.ContainsKey(name.Text))
+                                        _scalarParameterValues[name.Text] = val ? 1 : 0;
+                            }if (SCALERS.Contains(export.ExportType)) {
+                                if (export.TryGetValue(out float val, "DefaultValue"))
+                                    if (!_scalarParameterValues.ContainsKey(name.Text))
+                                        _scalarParameterValues[name.Text] = val;
                             }
                         }
                     }
@@ -726,6 +744,12 @@ namespace BlenderUmap {
                 #endregion
 
                 if (material is UMaterialInstance mi) {
+                    var staticParameters = mi.StaticParameters;
+                    if (staticParameters != null)
+                        foreach (var switchParameter in staticParameters.StaticSwitchParameters) {
+                            if (!_scalarParameterValues.ContainsKey(switchParameter.Name))
+                                _scalarParameterValues[switchParameter.Name] = switchParameter.Value ? 1 : 0;
+                        }
                     if (mi.Parent != null) {
                         PopulateTextures(mi.Parent);
                     }
