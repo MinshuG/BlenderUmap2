@@ -43,25 +43,25 @@ class TextureMapping:
             ["MaskTexture"]
         )
         self.UV2 = Textures(
+            ["Diffuse_Texture_2"],
+            ["Normals_Texture_2"],
+            ["Specular_Texture_2"],
+            ["Emissive_Texture_2"],
+            ["MaskTexture_2"]
+        )
+        self.UV3 = Textures(
             ["Diffuse_Texture_3"],
             ["Normals_Texture_3"],
             ["Specular_Texture_3"],
             ["Emissive_Texture_3"],
             ["MaskTexture_3"]
         )
-        self.UV3 = Textures(
+        self.UV4 = Textures(
             ["Diffuse_Texture_4"],
             ["Normals_Texture_4"],
             ["Specular_Texture_4"],
             ["Emissive_Texture_4"],
             ["MaskTexture_4"]
-        )
-        self.UV4 = Textures(
-            ["Diffuse_Texture_2"],
-            ["Normals_Texture_2"],
-            ["Specular_Texture_2"],
-            ["Emissive_Texture_2"],
-            ["MaskTexture_2"]
         )
 
     def to_dict(self):
@@ -82,7 +82,7 @@ def aeskeys_from_list(x: Any) -> List[T]:
     l = []
     l.append({
         "Guid": "00000000000000000000000000000000",
-        "Key": bpy.context.scene.aeskey
+        "Key": bpy.context.scene.aeskey.strip() if len(bpy.context.scene.aeskey.strip()) != 0 else "0x0000000000000000000000000000000000000000000000000000000000000000",
     })
     for a in x:
         if a.pakname == "" and a.daeskey == "":
@@ -125,6 +125,8 @@ class Config:
     bExportToDDSWhenPossible: bool
     bExportBuildingFoundations: bool
     ExportPackage: str
+    Textures: TextureMapping
+    CustomOptions: Dict[str, bool]
 
     def __init__(self) -> None:
         sc = bpy.context.scene
@@ -141,6 +143,7 @@ class Config:
         self.bExportBuildingFoundations = sc.bExportBuildingFoundations
         self.ExportPackage = sc.package
         self.Textures = textures_to_mapping(sc)
+        self.CustomOptions = sc.custom_options
 
     def to_dict(self) -> dict:
         result: dict = {"_Documentation": self.Documentation,
@@ -153,8 +156,11 @@ class Config:
                         "bExportBuildingFoundations": self.bExportBuildingFoundations,
                         "ExportPackage": self.ExportPackage,
                         "EncryptionKeys": aeskeys_from_list(self.EncryptionKeys),
-                        "Textures": textures_to_mapping(bpy.context.scene).to_dict()
+                        "Textures": textures_to_mapping(bpy.context.scene).to_dict(),
+
                         }
+        if bpy.context.scene.bUseCustomOptions:
+            result["OptionsOverrides"] = { x.name : x.value for x in self.CustomOptions }
         return result
 
     def load(self, out=None):  # TODO: load textures
@@ -184,9 +190,7 @@ class Config:
         sc.bExportBuildingFoundations = data["bExportBuildingFoundations"]
         sc.package = data["ExportPackage"]
 
-        for a in range(len(sc.dpklist)):
-            sc.dpklist.remove(a)
-
+        sc.dpklist.clear()
         sc.list_index = 0
         i = 0
         for x in data["EncryptionKeys"]:
@@ -203,6 +207,15 @@ class Config:
             dpk.pakname = x.get("FileName") or ""
             dpk.daeskey = x["Key"]
             i += 1
+
+        sc.custom_options.clear()
+        sc.custom_options_index = 0
+        for i, x in enumerate(data["OptionsOverrides"], start=0):
+            sc.custom_options_index = i
+            sc.custom_options.add()
+            opt = sc.custom_options[i]
+            opt.name = x
+            opt.value = data["OptionsOverrides"][x]
 
         # load textures
         for i in range(1, 5):
