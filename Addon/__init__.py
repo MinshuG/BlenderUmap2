@@ -24,12 +24,19 @@ bl_info = {
 }
 
 
-from . import auto_load
+# auto_load.init()
+from . import main
+from . import settings
 
-auto_load.init()
+modules = [main, settings]
 
 def register():
-    auto_load.register()
-    
+    for m in modules:
+        m.register()
+
 def unregister():
-    auto_load.unregister()
+    for m in modules:
+        m.unregister()
+
+if __name__ == "__main__":
+    register()

@@ -784,25 +784,25 @@ namespace BlenderUmap {
             MaskTexture = new[] {"MaskTexture"}
         };
         public TextureMap UV2 = new() {
-            Diffuse = new[] {"Diffuse_Texture_3"},
-            Normal = new[] {"Normals_Texture_3"},
-            Specular = new[] {"SpecularMasks_3"},
-            Emission = new[] {"EmissiveTexture_3"},
-            MaskTexture = new[] {"MaskTexture_3"}
-        };
-        public TextureMap UV3 = new() {
-            Diffuse = new[] {"Diffuse_Texture_4"},
-            Normal = new[] {"Normals_Texture_4"},
-            Specular = new[] {"SpecularMasks_4"},
-            Emission = new[] {"EmissiveTexture_4"},
-            MaskTexture = new[] {"MaskTexture_4"}
-            };
-        public TextureMap UV4 = new() {
             Diffuse = new[] {"Diffuse_Texture_2"},
             Normal = new[] {"Normals_Texture_2"},
             Specular = new[] {"SpecularMasks_2"},
             Emission = new[] {"EmissiveTexture_2"},
             MaskTexture = new[] {"MaskTexture_2"}
+        };
+        public TextureMap UV3 = new() {
+            Diffuse = new[] {"Diffuse_Texture_3"},
+            Normal = new[] {"Normals_Texture_3"},
+            Specular = new[] {"SpecularMasks_3"},
+            Emission = new[] {"EmissiveTexture_3"},
+            MaskTexture = new[] {"MaskTexture_3"}
+            };
+        public TextureMap UV4 = new() {
+            Diffuse = new[] {"Diffuse_Texture_4"},
+            Normal = new[] {"Normals_Texture_4"},
+            Specular = new[] {"SpecularMasks_4"},
+            Emission = new[] {"EmissiveTexture_4"},
+            MaskTexture = new[] {"MaskTexture_4"}
             };
     }
 

@@ -15,6 +15,14 @@ try:
 except ImportError:
     from ..umap import import_umap, cleanup
 
+classes = []
+
+def register_class(cls):
+    classes.append(cls)
+    return cls
+
+def config_file_exists():
+    return os.path.isfile(os.path.join(bpy.context.scene.exportPath, "config.json"))
 
 def main(context, onlyimport=False):
     sc = bpy.context.scene
@@ -145,7 +153,7 @@ class UE4Version:  # idk why
         ("GAME_UE5_2", "GAME_UE5_2", ""),
     )
 
-
+@register_class
 class VIEW3D_MT_AdditionalOptions(bpy.types.Menu):
     bl_label = "Additional Options"
 
@@ -163,15 +171,19 @@ except:
     version = "0"
 
 # UI
-class VIEW3D_PT_Import(bpy.types.Panel):
-    """Creates a Panel in Properties(N)"""
-
-    bl_label = f"BlenderUmap2 (v{version})"
-    bl_idname = "VIEW3D_PT_Umap"
+class BlenderUmapPanel(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Umap"
     bl_context = "objectmode"
+
+
+@register_class
+class VIEW3D_PT_BlenderUmapMain(BlenderUmapPanel):
+    """Creates a Panel in Properties(N)"""
+
+    bl_label = f"BlenderUmap2 (v{version})"
+    bl_idname = "VIEW3D_PT_BlenderUmapMain"
 
     bpy.types.Scene.ue4_versions = bpy.props.EnumProperty(
         name="UE Version", items=UE4Version.Versions
@@ -182,7 +194,7 @@ class VIEW3D_PT_Import(bpy.types.Panel):
 
         col = layout.column(align=True, heading="Exporter Settings:")
 
-        if os.path.isfile(os.path.join(bpy.context.scene.exportPath, "config.json")):
+        if config_file_exists():
             col.operator(
                 "umap.load_configs", icon="FILE_REFRESH", text="Reload Last Used Config"
             )
@@ -195,15 +207,7 @@ class VIEW3D_PT_Import(bpy.types.Panel):
         row = col.row(align=True)
 
         col2 = row.column(align=True)
-        col2.template_list(
-            "VIEW3D_UL_DPKLIST",
-            "VIEW3D_UL_dpklist",
-            context.scene,
-            "dpklist",
-            context.scene,
-            "list_index",
-            rows=3,
-        )
+        col2.template_list("VIEW3D_UL_DPKLIST", "VIEW3D_UL_dpklist", context.scene, "dpklist", context.scene, "list_index", rows=3)
         row.separator()
 
         col3 = row.column(align=True)
@@ -257,23 +261,121 @@ class VIEW3D_PT_Import(bpy.types.Panel):
         if os.path.exists(os.path.join(context.scene.exportPath, "processed.json")):
             col.operator("umap.onlyimport", text="Only Import", icon="IMPORT")
 
-        layout.separator()
+        if version == "0":
+            col.operator("umap.dumpconfig", text="Dump Config", icon="DOWNARROW_HLT")
 
-        layout.label(text="Texture Mappings:", icon="TEXTURE")
+
+@register_class
+class VIEW3D_PT_BlenderUmapTextureMappings(BlenderUmapPanel):
+    """Creates a Panel in Properties(N)"""
+
+    bl_label = f"Texture Mappings"
+    bl_parent_id = "VIEW3D_PT_BlenderUmapMain"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.separator()
         col = layout.grid_flow(align=True, even_columns=True, even_rows=True)
 
-        b_should_sep = False
         for i in range(1, 5):  # 4UVs
-            if b_should_sep:
+            if i != 1:
                 col.separator()
-            else:
-                b_should_sep = True
-
             col.label(text=f"UV Map {i}", icon="GROUP_UVS")
             for t in ["Diffuse", "Normal", "Specular", "Emission", "Mask"]:
                 col.prop(context.scene, f"{t}_{i}".lower())
 
 
+@register_class
+class VIEW3D_PT_BlenderUmapAdvancedOptions(BlenderUmapPanel):
+    bl_label = f"Advanced Options"
+    bl_parent_id = "VIEW3D_PT_BlenderUmapMain"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        # warning only change if you know what you are doing
+        layout.label(text="Warning: Only change if you know what you are doing", icon="ERROR")
+
+        col = layout.column(align=True)
+        col.label(text="Options Overrides:")
+
+        col.prop(context.scene, "bUseCustomOptions")
+        if context.scene.bUseCustomOptions:
+            row = col.row(align=True)
+
+            col2 = row.column(align=True)
+            col2.template_list("VIEW3D_UL_CustomOptions", "custom_options_list", context.scene,
+                            "custom_options", context.scene, "custom_options_index", rows=3)
+
+            row.separator()
+
+            col3 = row.column(align=True)
+            col3.operator("custom_options.new_item", icon="ADD", text="")
+            col3.operator("custom_options.delete_item", icon="REMOVE", text="")
+
+
+@register_class
+class CustomOptionsListItem(bpy.types.PropertyGroup):
+    """Group of properties representing an item in the list."""
+
+    name: StringProperty(
+           name="Name",
+           description="",
+           default="key")
+
+    value: BoolProperty(
+           name="True",
+           description="",
+           default=False)
+
+@register_class
+class VIEW3D_UL_CustomOptions(bpy.types.UIList):
+    """Custom Options List"""
+
+    def draw_item(
+        self, context, layout, data, item, icon, active_data, active_propname, index
+    ):
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            split = layout.split(factor=0.6)
+            split.prop(item, "name", text="", emboss=True)
+            split.separator()
+            split.prop(item, "value", text= "True" if item.value else "False", toggle=0, emboss=True)
+        elif self.layout_type in {"GRID"}:
+            pass
+
+@register_class
+class CustomOptions_OT_NewItem(bpy.types.Operator):
+    """Add a new item to the list."""
+
+    bl_idname = "custom_options.new_item"
+    bl_label = "Add a new item"
+
+    def execute(self, context):
+        context.scene.custom_options.add()
+        context.scene.custom_options_index + 1
+        return {"FINISHED"}
+
+@register_class
+class CustomOptions_OT_DeleteItem(bpy.types.Operator):
+    """Delete the selected item from the list."""
+
+    bl_idname = "custom_options.delete_item"
+    bl_label = "Deletes an item"
+
+    @classmethod
+    def poll(cls, context):
+        return len(context.scene.custom_options) > 0
+
+    def execute(self, context):
+        custom_options = context.scene.custom_options
+        index = context.scene.custom_options_index
+        custom_options.remove(index)
+        context.scene.custom_options_index = min(max(0, index - 1), len(custom_options) - 1)
+        return {"FINISHED"}
+
+@register_class
 class VIEW_PT_UmapOperator(bpy.types.Operator):
     """Import Umap"""
 
@@ -284,7 +386,7 @@ class VIEW_PT_UmapOperator(bpy.types.Operator):
         main(context)
         return {"FINISHED"}
 
-
+@register_class
 class VIEW_PT_UmapOnlyImport(bpy.types.Operator):
     """Only import already exported umap"""
 
@@ -295,7 +397,24 @@ class VIEW_PT_UmapOnlyImport(bpy.types.Operator):
         main(context, True)
         return {"FINISHED"}
 
+# dump config operator
+@register_class
+class VIEW_PT_UmapDumpConfig(bpy.types.Operator):
+    """Dump config to file"""
 
+    bl_idname = "umap.dumpconfig"
+    bl_label = "Dump Config"
+
+    @classmethod
+    def poll(cls, context):
+        return config_file_exists()
+
+    def execute(self, context):
+        print("Dumping config to file")
+        Config().dump(context.scene.exportPath)
+        return {"FINISHED"}
+
+@register_class
 class Fortnite(bpy.types.Operator):
     bl_idname = "umap.fillfortnitekeys"
     bl_label = "Fill Fortnite AES keys"
@@ -354,7 +473,7 @@ class Fortnite(bpy.types.Operator):
 
         return {"FINISHED"}
 
-
+@register_class
 class FortniteMappings(bpy.types.Operator):
     bl_idname = "umap.downloadmappings"
     bl_label = "Download mappings for Fortnite"
@@ -414,7 +533,7 @@ class FortniteMappings(bpy.types.Operator):
                 f.write(downfile.read(downfile.length))
         return True
 
-
+@register_class
 class ListItem(bpy.types.PropertyGroup):
     pakname: StringProperty(
         name="Pak Name", description="Name of the Pak file. (Optional)", default=""
@@ -429,7 +548,7 @@ class ListItem(bpy.types.PropertyGroup):
         maxlen=32,
     )
 
-
+@register_class
 class VIEW3D_UL_DPKLIST(bpy.types.UIList):
     """Dynamic Pak AES key List"""
 
@@ -449,7 +568,7 @@ class VIEW3D_UL_DPKLIST(bpy.types.UIList):
             else:
                 layout.label(text=item.pakname)
 
-
+@register_class
 class DPKLIST_OT_NewItem(bpy.types.Operator):
     """Add a new item to the list."""
 
@@ -461,8 +580,8 @@ class DPKLIST_OT_NewItem(bpy.types.Operator):
         context.scene.list_index + 1
         return {"FINISHED"}
 
-
-class LIST_OT_DeleteItem(bpy.types.Operator):
+@register_class
+class DPKLIST_OT_DeleteItem(bpy.types.Operator):
     """Delete the selected item from the list."""
 
     bl_idname = "dpklist.delete_item"
@@ -479,7 +598,7 @@ class LIST_OT_DeleteItem(bpy.types.Operator):
         context.scene.list_index = min(max(0, index - 1), len(dpklist) - 1)
         return {"FINISHED"}
 
-
+@register_class
 class LOAD_Configs(bpy.types.Operator):
     bl_label = "Load Config from File"
     bl_idname = "umap.load_configs"
@@ -654,13 +773,24 @@ def create_node_groups():
         tex_shader.inputs[3].name = "Emission"
         tex_shader.inputs[4].name = "Alpha"
 
-
 def register():
-    # bpy.utils.register_class(VIEW_PT_UmapOperator)
-    # bpy.utils.register_class(VIEW_PT_Import)
+
+    for cls in classes:
+        bpy.utils.register_class(cls)
 
     bpy.types.Scene.dpklist = CollectionProperty(type=ListItem)
     bpy.types.Scene.list_index = IntProperty(name="", default=0)
+
+    bpy.types.Scene.custom_options = CollectionProperty(type=CustomOptionsListItem)
+    bpy.types.Scene.custom_options_index = IntProperty(name="", default=0)
+
+    # bool use custom options
+    bpy.types.Scene.bUseCustomOptions = BoolProperty(
+        name="Use Options Overrides",
+        description="Use Custom Options Overrides",
+        default=False,
+        subtype="NONE",
+    )
 
     bpy.types.Scene.Game_Path = StringProperty(
         name="Game Path",
@@ -764,8 +894,9 @@ def register():
 
 
 def unregister():
-    # bpy.utils.unregister_class(VIEW_PT_UmapOperator)
-    # bpy.utils.unregister_class(VIEW_PT_Import)
+
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
 
     sc = bpy.types.Scene
     del sc.Game_Path
@@ -781,6 +912,7 @@ def unregister():
     del sc.use_cube_as_fallback
     del sc.additionalargs
     del sc.exportPath
+    del sc.bUseCustomOptions
 
 
 if __name__ == "__main__":

@@ -32,3 +32,13 @@ class OBJECT_OT_blenderUmap_prefs(Operator):
         # addon_prefs = preferences.addons[__name__].preferences
 
         return {'FINISHED'}
+
+classes = (BlenderUmapPreferences, OBJECT_OT_blenderUmap_prefs)
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
