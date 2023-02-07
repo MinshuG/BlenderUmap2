@@ -910,7 +910,6 @@ def unregister():
     del sc.reuse_maps
     del sc.reuse_mesh
     del sc.use_cube_as_fallback
-    del sc.additionalargs
     del sc.exportPath
     del sc.bUseCustomOptions
 
