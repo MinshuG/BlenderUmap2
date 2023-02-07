@@ -281,15 +281,6 @@ class VIEW_PT_UmapOperator(bpy.types.Operator):
     bl_label = "Umap Exporter"
 
     def execute(self, context):
-        if context.scene.bUseUModel:
-            if not os.path.exists(
-                os.path.join(bpy.context.scene.exportPath, "umodel.exe")
-            ):
-                self.report(
-                    {"ERROR"}, "umodel.exe not found in Export Directory(Export Path)"
-                )
-                return {"CANCELLED"}
-
         main(context)
         return {"FINISHED"}
 
@@ -735,13 +726,6 @@ def register():
         min=0,
     )
 
-    bpy.types.Scene.bUseUModel = BoolProperty(
-        name="Use UModel",
-        description="Use UModel for the exporting process to export meshes, materials, and textures",
-        default=False,
-        subtype="NONE",
-    )
-
     bpy.types.Scene.reuse_maps = BoolProperty(
         name="Reuse Maps",
         description="Reuse already imported map rather then importing them again",
@@ -760,12 +744,6 @@ def register():
         name="Use Cube as Fallback Mesh",
         description="Use cube if mesh is not found",
         default=True,
-        subtype="NONE",
-    )
-
-    bpy.types.Scene.additionalargs = StringProperty(
-        name="UModel Additional Args",
-        description="Additional Args for UModel",
         subtype="NONE",
     )
 
@@ -798,7 +776,6 @@ def unregister():
     del sc.bExportBuildingFoundations
     del sc.bdumpassets
     del sc.ObjectCacheSize
-    del sc.bUseUModel
     del sc.reuse_maps
     del sc.reuse_mesh
     del sc.use_cube_as_fallback
