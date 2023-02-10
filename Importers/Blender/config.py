@@ -210,7 +210,7 @@ class Config:
 
         sc.custom_options.clear()
         sc.custom_options_index = 0
-        for i, x in enumerate(data["OptionsOverrides"], start=0):
+        for i, x in enumerate(data.get("OptionsOverrides", []), start=0):
             sc.custom_options_index = i
             sc.custom_options.add()
             opt = sc.custom_options[i]
