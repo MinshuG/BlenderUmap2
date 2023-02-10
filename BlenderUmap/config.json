@@ -47,5 +47,9 @@
       "FileName": "pakchunk1001-WindowsClient.ucas",
       "Key": "0x..."
     }
-  ]
+  ],
+  "OptionsOverrides": {
+    "key1": true,
+    "key2": false
+  }
 }
