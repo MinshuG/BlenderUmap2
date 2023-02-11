@@ -31,6 +31,7 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using SkiaSharp;
 using static CUE4Parse.UE4.Assets.Exports.Texture.EPixelFormat;
+// ReSharper disable ConditionIsAlwaysTrueOrFalse
 
 // ReSharper disable PositionalPropertyUsedProblem
 namespace BlenderUmap {
@@ -522,7 +523,7 @@ namespace BlenderUmap {
                         try {
                             Interlocked.Increment(ref ThreadWorkCount);
                             Log.Information("Saving mesh to {0}", output.FullName);
-                            var exporter = new MeshExporter(meshExport, new ExporterOptions(), false);
+                            var exporter = new MeshExporter(meshExport, new ExporterOptions(){ SocketFormat = ESocketFormat.None }, false);
                             if (exporter.MeshLods.Count == 0) {
                                 Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
                                 Interlocked.Decrement(ref ThreadWorkCount);
