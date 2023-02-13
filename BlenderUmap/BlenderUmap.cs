@@ -233,7 +233,11 @@ namespace BlenderUmap {
             Log.Information("Writing to {0}", file.FullName);
 
             using var writer = file.CreateText();
-
+#if DEBUG
+            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer, comps);
+#else
+            new JsonSerializer().Serialize(writer, comps);
+#endif
             var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
             file2.Directory.Create();
 
@@ -356,19 +360,11 @@ namespace BlenderUmap {
             }
 
             var staticMeshComp = actor.GetOrDefault<UObject>("StaticMeshComponent", null); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
-            if (actor is UStaticMeshComponent && staticMeshComp == null) {
+            if (actor is UInstancedStaticMeshComponent && staticMeshComp == null) {
                 staticMeshComp = actor;
             }
 
             if (staticMeshComp == null) return;
-
-            // identifiers
-            var comp = new JArray();
-            comps.Add(comp);
-            comp.Add(actor.TryGetValue<FGuid>(out var guid, "MyGuid") // /Script/FortniteGame.BuildingActor:MyGuid
-                ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant()
-                : Guid.NewGuid().ToString().Replace("-", ""));
-            comp.Add(actor.Name);
 
             // region mesh
             var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
@@ -460,6 +456,13 @@ namespace BlenderUmap {
             var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
             var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
             var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+            // identifiers
+            var comp = new JArray();
+            comps.Add(comp);
+            comp.Add(actor.TryGetValue<FGuid>(out var guid, "MyGuid") // /Script/FortniteGame.BuildingActor:MyGuid
+                ? guid.ToString(EGuidFormats.Digits).ToLowerInvariant()
+                : Guid.NewGuid().ToString().Replace("-", ""));
+            comp.Add(actor.Name);
             comp.Add(PackageIndexToDirPath(mesh));
             comp.Add(matsObj);
             comp.Add(JArray.FromObject(textureDataArr));
@@ -477,6 +480,21 @@ namespace BlenderUmap {
                 LightIndex = lights.Count;
             }
             comp.Add(LightIndex);
+
+            // create instances
+            var instComps = new JArray();
+            if (actor is UInstancedStaticMeshComponent instanced) {
+                if (instanced.PerInstanceSMData != null)
+                    foreach (var instanceTransform in instanced.PerInstanceSMData) {
+                        var t = instanceTransform.TransformData;
+                        var instComp = new JArray();
+                        instComp.Add(Vector(t.Translation));
+                        instComp.Add(Rotator(t.Rotation.Rotator()));
+                        instComp.Add(Vector(t.Scale3D));
+                        instComps.Add(instComp);
+                    }
+            }
+            comp.Add(instComps);
         }
 
         public static void AddToArray(Dictionary<string, string> matDict, FPackageIndex index, string ParamName) {

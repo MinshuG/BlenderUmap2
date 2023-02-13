@@ -45,6 +45,7 @@ def import_umap(processed_map_path: str,
         scale = comp[7] or [1, 1, 1]
         child_comps = comp[8]
         light_index = comp[9] if blights_exist else 0
+        instanceData = comp[10] # list of Transforms
 
         # if name is bigger than 50 (58 is blender limit) than hash it and use it as name
         if len(name) > 50:
@@ -105,7 +106,10 @@ def import_umap(processed_map_path: str,
 
         existing_mesh = bpy.data.meshes.get(key) if reuse_meshes else None
 
-        if existing_mesh:
+        if len(instanceData) > 0:
+            pass
+            # imported_object = new_object(bpy.data.meshes["__empty"]) # group-parent
+        elif existing_mesh:
             new_object(existing_mesh)
             continue
 
@@ -129,9 +133,29 @@ def import_umap(processed_map_path: str,
             for m_idx, (m_path, m_textures) in enumerate(mats.items()):
                 if m_textures:
                     import_material(imported, m_idx, m_path, td_suffix, m_textures, texture_data, tex_shader, data_dir)
+
+            if len(instanceData) > 0: # remove the mesh
+                bpy.ops.object.delete()
         else:
             print("WARNING: Mesh not imported, defaulting to fallback mesh:", full_mesh_path)
             new_object()
+
+        if instanceData and len(instanceData) > 0:
+            parent_ob =  bpy.data.objects.new(name, bpy.data.meshes["__empty"])
+            parent_ob.name = name + "_parent"
+            apply_ob_props(parent_ob)
+            bpy.context.collection.objects.link(parent_ob)
+
+            for i, instance in enumerate(instanceData):
+                ob = bpy.data.objects.new(name, bpy.data.meshes.get(key))
+                ob.name = name + "_" + str(i)
+                bpy.context.collection.objects.link(ob)
+                bpy.context.view_layer.objects.active = ob
+                ob.location = [instance[0][0] * 0.01, instance[0][1] * -0.01, instance[0][2] * 0.01]
+                ob.rotation_mode = 'XYZ'
+                ob.rotation_euler = [radians(instance[1][2]), radians(-instance[1][0]), radians(-instance[1][1])]
+                ob.scale = instance[2]
+                ob.parent = parent_ob
 
     return map_collection_inst
 
