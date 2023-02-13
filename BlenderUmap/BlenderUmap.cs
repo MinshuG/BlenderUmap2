@@ -26,6 +26,7 @@ using CUE4Parse.Utils;
 using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Meshes;
 using CUE4Parse_Conversion.Textures;
+using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -282,6 +283,14 @@ namespace BlenderUmap {
         }
 
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels) {
+
+            var instanceComps = actor.GetOrDefault("InstanceComponents", Array.Empty<FPackageIndex>());
+            foreach (var instanceComp in instanceComps) {
+                if (instanceComp == null || instanceComp.IsNull) continue;
+                var instanceActor = instanceComp.Load();
+                ProcessActor(instanceActor, lights, comps, loadedLevels);
+            }
+
             if (actor is ALight) {
                 var lightcomp = actor.GetOrDefault<ULightComponent>("LightComponent", null);
                 if (lightcomp is not null) {
@@ -346,9 +355,12 @@ namespace BlenderUmap {
                 return;
             }
 
-            var staticMeshCompLazy = actor.GetOrDefault<FPackageIndex>("StaticMeshComponent", new FPackageIndex()); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
-            if (staticMeshCompLazy.IsNull) return;
+            var staticMeshComp = actor.GetOrDefault<UObject>("StaticMeshComponent", null); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+            if (actor is UStaticMeshComponent && staticMeshComp == null) {
+                staticMeshComp = actor;
+            }
 
+            if (staticMeshComp == null) return;
 
             // identifiers
             var comp = new JArray();
@@ -359,7 +371,6 @@ namespace BlenderUmap {
             comp.Add(actor.Name);
 
             // region mesh
-            var staticMeshComp = staticMeshCompLazy?.Load();
             var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
 
             if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
