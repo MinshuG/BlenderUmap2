@@ -2,9 +2,15 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlenderUmap", "BlenderUmap\BlenderUmap.csproj", "{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse", "..\CUE4Parse\CUE4Parse\CUE4Parse.csproj", "{31104706-60E8-4F03-8DD7-67F0295127AC}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse-Conversion", "..\CUE4Parse\CUE4Parse-Conversion\CUE4Parse-Conversion.csproj", "{A39A90F7-C4D6-4370-93EC-1937C50A548F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse", "..\FModel\CUE4Parse\CUE4Parse\CUE4Parse.csproj", "{82F8DACE-4164-4F57-B7B1-F935690EC69C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse-Conversion", "..\FModel\CUE4Parse\CUE4Parse-Conversion\CUE4Parse-Conversion.csproj", "{8578455D-994B-4B02-A239-821F5BAC202D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unreal.Core", "..\FortniteReplayDecompressor\src\Unreal.Core\Unreal.Core.csproj", "{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FortniteReplayReader", "..\FortniteReplayDecompressor\src\FortniteReplayReader\FortniteReplayReader.csproj", "{942F8841-8387-4FF0-AC57-D006D3296A51}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -16,13 +22,25 @@ Global
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{31104706-60E8-4F03-8DD7-67F0295127AC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{31104706-60E8-4F03-8DD7-67F0295127AC}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{31104706-60E8-4F03-8DD7-67F0295127AC}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{31104706-60E8-4F03-8DD7-67F0295127AC}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8578455D-994B-4B02-A239-821F5BAC202D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8578455D-994B-4B02-A239-821F5BAC202D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8578455D-994B-4B02-A239-821F5BAC202D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8578455D-994B-4B02-A239-821F5BAC202D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{942F8841-8387-4FF0-AC57-D006D3296A51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{942F8841-8387-4FF0-AC57-D006D3296A51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{942F8841-8387-4FF0-AC57-D006D3296A51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{942F8841-8387-4FF0-AC57-D006D3296A51}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -45,7 +45,7 @@ def import_umap(processed_map_path: str,
         scale = comp[7] or [1, 1, 1]
         child_comps = comp[8]
         light_index = comp[9] if blights_exist else 0
-        instanceData = comp[10] # list of Transforms
+        instanceData = comp[10] if len(comp) > 10 else []    # list of Transforms
 
         # if name is bigger than 50 (58 is blender limit) than hash it and use it as name
         if len(name) > 50:
