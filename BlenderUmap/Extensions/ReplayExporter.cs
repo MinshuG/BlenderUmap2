@@ -47,7 +47,7 @@ public class ReplayExporter
     public static IPackage ExportAndProduceProcessed(string obj, MyFileProvider provider) {
             var comps = new JArray();
 
-            var rr = new ReplayReader(new Logger<ReplayExporter>(new SerilogLoggerFactory()), ParseMode.Full);
+            var rr = new ReplayReader(null, ParseMode.Full); //new Logger<ReplayExporter>(new SerilogLoggerFactory())
 
             try {
                 var replay = rr.ReadReplay(File.OpenRead(obj));
@@ -82,23 +82,25 @@ public class ReplayExporter
 
                 var ac = record;
                 UObject staticMeshComp = new UObject();
-                UObject actorBlueprint;
+                UObject actorClass;
                 FPackageIndex mesh = new FPackageIndex();
-                if (ac is UBlueprintGeneratedClass ab) {
-                    actorBlueprint = ab.ClassDefaultObject.Load();
-                    mesh = actorBlueprint?.GetOrDefault<FPackageIndex>("StaticMesh");
-                    staticMeshComp = actorBlueprint?.GetOrDefault<UObject>("StaticMeshComponent");
+                if (ac is UBlueprintGeneratedClass actorBlueprint) {
+                    ac = actorBlueprint.ClassDefaultObject.Load();
+                }
 
-                    if (staticMeshComp != null && !staticMeshComp.TryGetValue(out mesh, "StaticMesh") && mesh == null) {
-                        foreach (var export in actorBlueprint.Owner.GetExports()) {
-                            if (export.ExportType == "StaticMeshComponent") {
-                                staticMeshComp = export;
-                                mesh = export.GetOrDefault("StaticMesh", new FPackageIndex());
-                                break;
-                            }
+                mesh = ac?.GetOrDefault<FPackageIndex>("StaticMesh");
+                staticMeshComp = ac?.GetOrDefault<UObject>("StaticMeshComponent");
+
+                if (staticMeshComp != null && !staticMeshComp.TryGetValue(out mesh, "StaticMesh") && mesh == null) {
+                    foreach (var export in ac.Owner.GetExports()) {
+                        if (export.ExportType == "StaticMeshComponent") {
+                            staticMeshComp = export;
+                            mesh = export.GetOrDefault("StaticMesh", new FPackageIndex());
+                            break;
                         }
                     }
                 }
+
                 if (mesh == null || mesh.IsNull) continue;
 
                 Log.Information("Loading {0}: {1}/{2} {3}", actor.Level, index, actors.Length, ac);
