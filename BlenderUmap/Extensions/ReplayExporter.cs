@@ -6,6 +6,7 @@ using CUE4Parse.FileProvider;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets;
 using CUE4Parse.UE4.Assets.Exports;
+using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
 using CUE4Parse.UE4.Exceptions;
 using CUE4Parse.UE4.Objects.Core.Math;
 using CUE4Parse.UE4.Objects.Engine;
@@ -81,22 +82,32 @@ public class ReplayExporter
                     continue;
 
                 var ac = record;
-                UObject staticMeshComp = new UObject();
-                UObject actorClass;
+                // UObject staticMeshComp = new UObject();
                 FPackageIndex mesh = new FPackageIndex();
                 if (ac is UBlueprintGeneratedClass actorBlueprint) {
                     ac = actorBlueprint.ClassDefaultObject.Load();
                 }
 
-                mesh = ac?.GetOrDefault<FPackageIndex>("StaticMesh");
-                staticMeshComp = ac?.GetOrDefault<UObject>("StaticMeshComponent");
+                // mesh = ac?.GetOrDefault<FPackageIndex>("StaticMesh");
+                var staticMeshComp = ac?.GetOrDefault<UObject>("StaticMeshComponent");
+                mesh = (staticMeshComp as UStaticMeshComponent)?.GetStaticMesh();
 
-                if (staticMeshComp != null && !staticMeshComp.TryGetValue(out mesh, "StaticMesh") && mesh == null) {
+                if (staticMeshComp != null && mesh is { IsNull: true}) {
                     foreach (var export in ac.Owner.GetExports()) {
                         if (export.ExportType == "StaticMeshComponent") {
-                            staticMeshComp = export;
-                            mesh = export.GetOrDefault("StaticMesh", new FPackageIndex());
+                            staticMeshComp = export as UStaticMeshComponent;
+                            mesh = (export as UStaticMeshComponent).GetStaticMesh();
                             break;
+                        }
+                        if (mesh == null) {
+                            // look in parent struct if not found
+                            var super = (record as UBlueprintGeneratedClass)?.SuperStruct.Load<UBlueprintGeneratedClass>();
+                            if (super == null) continue;
+                            foreach (var actorExp in super.Owner.GetExports()) {
+                                if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
