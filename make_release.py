@@ -9,6 +9,7 @@ try:
     branch = os.popen("git rev-parse --abbrev-ref HEAD").read().strip()
 except ValueError:
     version = "0"
+    branch = "unknown"
 
 minor = version[-1:]
 major = version[:-1]
@@ -20,14 +21,15 @@ version_f = StringIO()
 version_f.write(f"__version__ = '{version}'\n")
 version_f.write(f"branch = '{branch}'")
 
-def add_files_to_zip(zip_file: zipfile.ZipFile, pattern, prefix=''):
-    for file in glob.glob(pattern):
-        zip_file.write(file, os.path.join(prefix, os.path.basename(file)))
+def add_files_to_zip(zip_file: zipfile.ZipFile, base_path ,pattern, prefix='', recursive=True):
+    for file in glob.glob(pattern, recursive=recursive):
+        zipname = os.path.join(prefix, os.path.relpath(file, base_path))
+        zip_file.write(file, zipname)
 
 try: os.mkdir('release')
 except FileExistsError: pass
 
-for target in ["osx.12-x64", "win-x64", "linux-x64"]: # we can do this because we dpn't need CUE4Parse-Natives
+for target in ["osx.12-x64", "win-x64", "linux-x64"]: # we can do this because we don't need CUE4Parse-Natives
     try:
         for f in glob.glob("./BlenderUmap/bin/Publish/**"):
             os.remove(f)
@@ -37,8 +39,8 @@ for target in ["osx.12-x64", "win-x64", "linux-x64"]: # we can do this because w
     if code != 0:
         raise Exception(f"dotnet publish failed with code {code}")
     zipf = zipfile.ZipFile(f'release/BlenderUmap-{version}-{target}.zip', 'w', zipfile.ZIP_LZMA, allowZip64=True, compresslevel=9)
-    add_files_to_zip(zipf, "./BlenderUmap/bin/Publish/**", "BlenderUmap/")
-    add_files_to_zip(zipf, "./Importers/Blender/*.py", "BlenderUmap/")
+    add_files_to_zip(zipf, "./BlenderUmap/bin/Publish/", "./BlenderUmap/bin/Publish/**", "BlenderUmap/", False)
+    add_files_to_zip(zipf, "./Importers/Blender/", "./Importers/Blender/**/*.py", "BlenderUmap/", True)
 
     zipf.writestr("BlenderUmap/__version__.py", version_f.getvalue())
     zipf.close()

@@ -6,8 +6,9 @@ import bpy
 import json
 import os
 import time
-from io_import_scene_unreal_psa_psk_280 import pskimport
 from math import *
+
+from .psk.reader import do_psk_import
 from .piana import *
 
 # ---------- END INPUTS, DO NOT MODIFY ANYTHING BELOW UNLESS YOU NEED TO ----------
@@ -108,7 +109,7 @@ def import_umap(processed_map_path: str,
 
         existing_mesh = bpy.data.meshes.get(key) if reuse_meshes else None
 
-        if len(instanceData) > 0:
+        if instanceData and len(instanceData) > 0:
             pass
             # imported_object = new_object(bpy.data.meshes["__empty"]) # group-parent
         elif existing_mesh:
@@ -121,8 +122,7 @@ def import_umap(processed_map_path: str,
         elif os.path.exists(full_mesh_path + ".pskx"):
             full_mesh_path += ".pskx"
 
-        if os.path.exists(full_mesh_path) and pskimport(full_mesh_path, bpy.context, bReorientBones=True):
-            imported = bpy.context.active_object
+        if imported := do_psk_import(full_mesh_path, bpy.context):
             apply_ob_props(imported)
             imported.data.name = key
             bpy.ops.object.shade_smooth()
@@ -136,7 +136,7 @@ def import_umap(processed_map_path: str,
                 if m_textures:
                     import_material(imported, m_idx, m_path, td_suffix, m_textures, texture_data, tex_shader, data_dir)
 
-            if len(instanceData) > 0: # remove the mesh
+            if instanceData and len(instanceData) > 0: # remove the mesh
                 bpy.ops.object.delete()
         else:
             print("WARNING: Mesh not imported, defaulting to fallback mesh:", full_mesh_path)

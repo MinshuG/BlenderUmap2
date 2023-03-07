@@ -101,6 +101,8 @@ def main(context, onlyimport=False):
 
     # do it!
     with open(os.path.join(data_dir, "processed.json")) as file:
+        import time
+        stime = time.time()
         import_umap(
             json.loads(file.read()),
             import_collection,
@@ -110,6 +112,7 @@ def main(context, onlyimport=False):
             use_cube_as_fallback,
             tex_shader,
         )
+        print(f"Imported in {time.time() - stime} seconds")
 
     # go back to main scene
     bpy.context.window.scene = main_scene
@@ -774,7 +777,6 @@ def create_node_groups():
         tex_shader.inputs[4].name = "Alpha"
 
 def register():
-
     for cls in classes:
         bpy.utils.register_class(cls)
 
