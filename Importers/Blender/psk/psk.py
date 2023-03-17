@@ -185,13 +185,13 @@ class Psk(object):
         return len(self.vertex_normals) > 0
 
     def __init__(self):
-        self.points: List[Vector3] = []
-        self.wedges: List[Psk.Wedge] = []
-        self.faces: List[Psk.Face] = []
-        self.materials: List[Psk.Material] = []
-        self.weights: List[Psk.Weight] = []
-        self.bones: List[Psk.Bone] = []
-        self.extra_uvs: List[List[Vector2]] = []
-        self.vertex_colors: List[Color] = []
-        self.vertex_normals: List[Vector3] = []
+        self.points: Tuple[Vector3] = ()
+        self.wedges: Tuple[Psk.Wedge] = ()
+        self.faces: Tuple[Psk.Face] = ()
+        self.materials: Tuple[Psk.Material] = ()
+        self.weights: Tuple[Psk.Weight] = ()
+        self.bones: Tuple[Psk.Bone] = ()
+        self.extra_uvs: List[Tuple[Vector2]] = ()
+        self.vertex_colors: Tuple[Color] = ()
+        self.vertex_normals: Tuple[Vector3] = ()
 

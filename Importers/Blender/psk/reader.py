@@ -17,22 +17,12 @@ from .utils import PskImportOptions, rgb_to_srgb
 from .psk import *
 
 
-def _read_types(fp, data_class, section: Section, data):
+def _read_types(fp, data_class: ctypes.Structure, section: Section) -> Tuple[ctypes.Structure]: # 13.5 seconds
     buffer_length = section.data_size * section.data_count
-    buffer = fp.read(buffer_length)
-    offset = 0
-    for _ in range(section.data_count):
-        data.append(data_class.from_buffer_copy(buffer, offset))
-        offset += section.data_size
-
-# unpredictable behavior (idk why). sometimes it works, sometimes it doesn't
-# def _read_types(fp, data_class, section, data):
-#     buffer_length = section.data_size * section.data_count
-#     buffer = fp.read(buffer_length)
-#     a = ctypes.cast(buffer, ctypes.POINTER(data_class * section.data_count))
-#     data.extend(a.contents)
-#     assert len(data) == section.data_count
-
+    buffer = bytearray(fp.read(buffer_length))
+    # fp.readinto(buffer)
+    elements = (data_class * section.data_count).from_buffer(buffer)
+    return tuple(elements)
 
 def read_psk(path: str) -> Psk:
     psk = Psk()
@@ -43,31 +33,30 @@ def read_psk(path: str) -> Psk:
             if section.name == b'ACTRHEAD':
                 pass
             elif section.name == b'PNTS0000':
-                _read_types(fp, Vector3, section, psk.points)
+                psk.points = _read_types(fp, Vector3, section)
             elif section.name == b'VTXW0000':
                 if section.data_size == ctypes.sizeof(Psk.Wedge16):
-                    _read_types(fp, Psk.Wedge16, section, psk.wedges)
+                    psk.wedges = _read_types(fp, Psk.Wedge16, section)
                 elif section.data_size == ctypes.sizeof(Psk.Wedge32):
-                    _read_types(fp, Psk.Wedge32, section, psk.wedges)
+                    psk.wedges = _read_types(fp, Psk.Wedge32, section)
                 else:
                     raise RuntimeError('Unrecognized wedge format')
             elif section.name == b'FACE0000':
-                _read_types(fp, Psk.Face, section, psk.faces)
+                psk.faces = _read_types(fp, Psk.Face, section)
             elif section.name == b'MATT0000':
-                _read_types(fp, Psk.Material, section, psk.materials)
+                psk.materials = _read_types(fp, Psk.Material, section)
             elif section.name == b'REFSKELT':
-                _read_types(fp, Psk.Bone, section, psk.bones)
+                psk.bones = _read_types(fp, Psk.Bone, section)
             elif section.name == b'RAWWEIGHTS':
-                _read_types(fp, Psk.Weight, section, psk.weights)
+                psk.weights = _read_types(fp, Psk.Weight, section)
             elif section.name == b'FACE3200':
-                _read_types(fp, Psk.Face32, section, psk.faces)
+                psk.faces = _read_types(fp, Psk.Face32, section)
             elif section.name == b'VERTEXCOLOR':
-                _read_types(fp, Color, section, psk.vertex_colors)
+                psk.vertex_colors = _read_types(fp, Color, section)
             elif section.name.startswith(b'EXTRAUVS'):
-                psk.extra_uvs.append([])
-                _read_types(fp, Vector2, section, psk.extra_uvs[-1])
+                psk.extra_uvs += (_read_types(fp, Vector2, section), )
             elif section.name == b'VTXNORMS':
-                _read_types(fp, Vector3, section, psk.vertex_normals)
+                psk.vertex_normals = _read_types(fp, Vector3, section)
             else:
                 raise RuntimeError(f'Unrecognized section "{section.name} at position {15:fp.tell()}"')
     return psk
