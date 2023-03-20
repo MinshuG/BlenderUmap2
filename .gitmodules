@@ -1,0 +1,6 @@
+[submodule "FortniteReplayDecompressor"]
+	path = FortniteReplayDecompressor
+	url = https://github.com/MinshuG/FortniteReplayDecompressor.git
+[submodule "CUE4Parse"]
+	path = CUE4Parse
+	url = https://github.com/FabianFG/CUE4Parse.git
