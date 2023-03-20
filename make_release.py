@@ -8,6 +8,7 @@ try:
     int(version)
     branch = os.popen("git rev-parse --abbrev-ref HEAD").read().strip()
 except ValueError:
+    print("not a git repository?")
     version = "0"
     branch = "unknown"
 
