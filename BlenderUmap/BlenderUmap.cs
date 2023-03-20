@@ -535,7 +535,7 @@ namespace BlenderUmap {
                 var obj = index.LoadAsync().ConfigureAwait(false).GetAwaiter().GetResult(); // does this do something?
                 if (obj is not UTexture2D texture) {
                     stream.Close();
-                    output.Remove();
+                    output.Delete();
                     Interlocked.Decrement(ref ThreadWorkCount);
                     return;
                 }
@@ -573,6 +573,7 @@ namespace BlenderUmap {
                         if (exporter.MeshLods.Count == 0) {
                             Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
                             stream.Close();
+                            output.Delete();
                             Interlocked.Decrement(ref ThreadWorkCount);
                             return;
                         }
