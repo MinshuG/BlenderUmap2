@@ -369,7 +369,6 @@ namespace BlenderUmap {
 
             if (staticMeshComp == null) return;
 
-
             // region mesh
             var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
 
@@ -535,6 +534,9 @@ namespace BlenderUmap {
 
                 var obj = index.LoadAsync().ConfigureAwait(false).GetAwaiter().GetResult(); // does this do something?
                 if (obj is not UTexture2D texture) {
+                    stream.Close();
+                    output.Remove();
+                    Interlocked.Decrement(ref ThreadWorkCount);
                     return;
                 }
                 // Interlocked.Increment(ref ThreadWorkCount);
@@ -570,6 +572,7 @@ namespace BlenderUmap {
                         var exporter = new MeshExporter(meshExport, new ExporterOptions(){ SocketFormat = ESocketFormat.None }, false);
                         if (exporter.MeshLods.Count == 0) {
                             Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                            stream.Close();
                             Interlocked.Decrement(ref ThreadWorkCount);
                             return;
                         }

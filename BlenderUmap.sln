@@ -2,15 +2,17 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlenderUmap", "BlenderUmap\BlenderUmap.csproj", "{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse-Conversion", "..\CUE4Parse\CUE4Parse-Conversion\CUE4Parse-Conversion.csproj", "{A39A90F7-C4D6-4370-93EC-1937C50A548F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FortniteReplayReader", "FortniteReplayDecompressor\src\FortniteReplayReader\FortniteReplayReader.csproj", "{8188E8E4-376B-4E4A-A89A-93DC818A314E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse", "..\FModel\CUE4Parse\CUE4Parse\CUE4Parse.csproj", "{82F8DACE-4164-4F57-B7B1-F935690EC69C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unreal.Core", "FortniteReplayDecompressor\src\Unreal.Core\Unreal.Core.csproj", "{D53FF541-AC83-478F-9170-AE8F9D891AC3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse-Conversion", "..\FModel\CUE4Parse\CUE4Parse-Conversion\CUE4Parse-Conversion.csproj", "{8578455D-994B-4B02-A239-821F5BAC202D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unreal.Encryption", "FortniteReplayDecompressor\src\Unreal.Encryption\Unreal.Encryption.csproj", "{4F8829F5-6127-4D58-8771-7BDB5D6F89E1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unreal.Core", "..\FortniteReplayDecompressor\src\Unreal.Core\Unreal.Core.csproj", "{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse", "CUE4Parse\CUE4Parse\CUE4Parse.csproj", "{F08A782E-365F-481C-A245-3D90C136B385}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FortniteReplayReader", "..\FortniteReplayDecompressor\src\FortniteReplayReader\FortniteReplayReader.csproj", "{942F8841-8387-4FF0-AC57-D006D3296A51}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CUE4Parse-Conversion", "CUE4Parse\CUE4Parse-Conversion\CUE4Parse-Conversion.csproj", "{B8CEC2FC-0B7F-494F-9C11-BFF74B705DA2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OozSharp", "FortniteReplayDecompressor\src\OozSharp\OozSharp.csproj", "{022768BB-7AF8-4110-A4D7-91520C849BA7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -22,25 +24,29 @@ Global
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1E0D529-C11A-4116-ACF3-F5CB21302C0E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A39A90F7-C4D6-4370-93EC-1937C50A548F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{82F8DACE-4164-4F57-B7B1-F935690EC69C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8578455D-994B-4B02-A239-821F5BAC202D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8578455D-994B-4B02-A239-821F5BAC202D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8578455D-994B-4B02-A239-821F5BAC202D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8578455D-994B-4B02-A239-821F5BAC202D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E97A7D5F-C1E7-447F-9DE9-8D6E8639684F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{942F8841-8387-4FF0-AC57-D006D3296A51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{942F8841-8387-4FF0-AC57-D006D3296A51}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{942F8841-8387-4FF0-AC57-D006D3296A51}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{942F8841-8387-4FF0-AC57-D006D3296A51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8188E8E4-376B-4E4A-A89A-93DC818A314E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8188E8E4-376B-4E4A-A89A-93DC818A314E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8188E8E4-376B-4E4A-A89A-93DC818A314E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8188E8E4-376B-4E4A-A89A-93DC818A314E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D53FF541-AC83-478F-9170-AE8F9D891AC3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D53FF541-AC83-478F-9170-AE8F9D891AC3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D53FF541-AC83-478F-9170-AE8F9D891AC3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D53FF541-AC83-478F-9170-AE8F9D891AC3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F8829F5-6127-4D58-8771-7BDB5D6F89E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F8829F5-6127-4D58-8771-7BDB5D6F89E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F8829F5-6127-4D58-8771-7BDB5D6F89E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F8829F5-6127-4D58-8771-7BDB5D6F89E1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F08A782E-365F-481C-A245-3D90C136B385}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F08A782E-365F-481C-A245-3D90C136B385}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F08A782E-365F-481C-A245-3D90C136B385}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F08A782E-365F-481C-A245-3D90C136B385}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B8CEC2FC-0B7F-494F-9C11-BFF74B705DA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8CEC2FC-0B7F-494F-9C11-BFF74B705DA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8CEC2FC-0B7F-494F-9C11-BFF74B705DA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8CEC2FC-0B7F-494F-9C11-BFF74B705DA2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{022768BB-7AF8-4110-A4D7-91520C849BA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{022768BB-7AF8-4110-A4D7-91520C849BA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{022768BB-7AF8-4110-A4D7-91520C849BA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{022768BB-7AF8-4110-A4D7-91520C849BA7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
