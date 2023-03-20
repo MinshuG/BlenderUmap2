@@ -236,11 +236,6 @@ namespace BlenderUmap {
             Log.Information("Writing to {0}", file.FullName);
 
             using var writer = file.CreateText();
-#if DEBUG
-            new JsonSerializer() { Formatting = Formatting.Indented }.Serialize(writer, comps);
-#else
-            new JsonSerializer().Serialize(writer, comps);
-#endif
             var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
             file2.Directory.Create();
 
