@@ -603,14 +603,18 @@ namespace BlenderUmap {
                     stream = output.OpenWrite();
                     Interlocked.Increment(ref ThreadWorkCount);
                 }
+
+                var obj = index.LoadAsync().ConfigureAwait(false).GetAwaiter().GetResult(); // does this do something?
+                if (obj is not UTexture2D texture) {
+                    stream.Close();
+                    output.Delete();
+                    Interlocked.Decrement(ref ThreadWorkCount);
+                    return;
+                }
+                // Interlocked.Increment(ref ThreadWorkCount);
+                Log.Information("Saving texture to {0}", output.FullName);
                 // CUE4Parse only reads the first FTexturePlatformData and drops the rest
                 try {
-                    var obj = index.Load(); // does this do something?
-                    if (obj is not UTexture2D texture) {
-                        Interlocked.Decrement(ref ThreadWorkCount); // #FIXME creates empty file
-                        return;
-                    }
-                    Log.Information("Saving texture to {0}", output.FullName);
                     var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                     using var image = texture.Decode(firstMip);
                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -640,6 +644,8 @@ namespace BlenderUmap {
                         var exporter = new MeshExporter(meshExport, new ExporterOptions(){ SocketFormat = ESocketFormat.None }, false);
                         if (exporter.MeshLods.Count == 0) {
                             Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
+                            stream.Close();
+                            output.Delete();
                             Interlocked.Decrement(ref ThreadWorkCount);
                             return;
                         }
