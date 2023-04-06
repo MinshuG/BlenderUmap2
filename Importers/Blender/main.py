@@ -705,6 +705,11 @@ def create_node_groups():
 
         # I/O
         g_in = uvm.nodes.new("NodeGroupInput")
+        uvm.inputs.new("NodeSocketShader", "Shader")
+        uvm.inputs.new("NodeSocketShader", "Shader")
+        uvm.inputs.new("NodeSocketShader", "Shader")
+        uvm.inputs.new("NodeSocketShader", "Shader")
+
         g_out = uvm.nodes.new("NodeGroupOutput")
         g_in.location = [-1700, 220]
         g_out.location = [300, 300]
@@ -726,6 +731,7 @@ def create_node_groups():
 
         g_in = tex_shader.nodes.new("NodeGroupInput")
         g_out = tex_shader.nodes.new("NodeGroupOutput")
+        tex_shader.outputs.new("NodeSocketShader", "Shader")
         g_in.location = [-700, 0]
         g_out.location = [350, 300]
 
@@ -734,6 +740,7 @@ def create_node_groups():
         tex_shader.links.new(principled_bsdf.outputs[0], g_out.inputs[0])
 
         # diffuse
+        tex_shader.inputs.new("NodeSocketColor", "Diffuse")
         tex_shader.links.new(g_in.outputs[0], principled_bsdf.inputs["Base Color"])
 
         # normal
@@ -744,12 +751,15 @@ def create_node_groups():
         norm_map.location = [-200, norm_y]
         norm_curve.mapping.curves[1].points[0].location = [0, 1]
         norm_curve.mapping.curves[1].points[1].location = [1, 0]
+
+        tex_shader.inputs.new("NodeSocketColor", "Normal")
         tex_shader.links.new(g_in.outputs[1], norm_curve.inputs[1])
         tex_shader.links.new(norm_curve.outputs[0], norm_map.inputs[1])
         tex_shader.links.new(norm_map.outputs[0], principled_bsdf.inputs["Normal"])
         tex_shader.inputs[1].default_value = [0.5, 0.5, 1, 1]
 
         # specular
+        tex_shader.inputs.new("NodeSocketColor", "Specular")
         spec_y = 140
         spec_separate_rgb = tex_shader.nodes.new("ShaderNodeSeparateRGB")
         spec_separate_rgb.location = [-200, spec_y]
@@ -766,10 +776,12 @@ def create_node_groups():
         tex_shader.inputs[2].default_value = [0.5, 0, 0.5, 1]
 
         # emission
+        tex_shader.inputs.new("NodeSocketColor", "Emission")
         tex_shader.links.new(g_in.outputs[3], principled_bsdf.inputs["Emission"])
         tex_shader.inputs[3].default_value = [0, 0, 0, 1]
 
         # alpha
+        tex_shader.inputs.new("NodeSocketColor", "Alpha")
         alpha_separate_rgb = tex_shader.nodes.new("ShaderNodeSeparateRGB")
         alpha_separate_rgb.location = [-200, -180]
         tex_shader.links.new(g_in.outputs[4], alpha_separate_rgb.inputs[0])
@@ -778,11 +790,11 @@ def create_node_groups():
         )
         tex_shader.inputs[4].default_value = [1, 0, 0, 1]
 
-        tex_shader.inputs[0].name = "Diffuse"
-        tex_shader.inputs[1].name = "Normal"
-        tex_shader.inputs[2].name = "Specular"
-        tex_shader.inputs[3].name = "Emission"
-        tex_shader.inputs[4].name = "Alpha"
+        # tex_shader.inputs[0].name = "Diffuse"
+        # tex_shader.inputs[1].name = "Normal"
+        # tex_shader.inputs[2].name = "Specular"
+        # tex_shader.inputs[3].name = "Emission"
+        # tex_shader.inputs[4].name = "Alpha"
 
 def register():
     for cls in classes:
