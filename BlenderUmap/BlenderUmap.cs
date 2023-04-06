@@ -401,7 +401,7 @@ namespace BlenderUmap {
             }
             // endregion
             
-            // if (mesh == null || mesh.IsNull) return; // having a mesh is not necessary it could just be a root component or is does it?
+            if (mesh == null || mesh.IsNull) return; // having a mesh is not necessary it could just be a root component or is does it?
             
             var matsObj = new JObject(); // matpath: [4x[str]]
             var textureDataArr = new List<Dictionary<string, string>>();
@@ -532,7 +532,7 @@ namespace BlenderUmap {
             // char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
             ThreadPool.QueueUserWorkItem(_ => {
                 FileStream stream;
-                lock (MeshLock) {
+                lock (TextureLock) {
                     if (output.Exists) {
                         Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                         return;

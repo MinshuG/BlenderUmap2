@@ -225,7 +225,7 @@ def import_material(ob: bpy.types.Object,
 
         # VectorParams (Color)
         for input_name, value in material_info["VectorParams"].items():
-            if input_name not in shader_node.inputs:
+            if input_name not in shader_node.inputs or shader_node.inputs[input_name].bl_idname != "NodeSocketColor":
                 continue
             shader_node.inputs[input_name].default_value = hex_to_rgb(value)
 
