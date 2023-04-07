@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -26,6 +26,7 @@ using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Meshes;
 using CUE4Parse_Conversion.Textures;
 using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
+using CUE4Parse.UE4.Objects.Core.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -80,8 +81,14 @@ namespace BlenderUmap {
 
                 ObjectTypeRegistry.RegisterEngine(typeof(USpotLightComponent).Assembly);
 
-                provider = new MyFileProvider(paksDir, new VersionContainer(config.Game, optionOverrides: config.OptionsOverrides), config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
+                var customVersions = new List<FCustomVersion>();
+                foreach (var t in config.CustomVersionOverrides) {
+                    customVersions.Add(new FCustomVersion(){ Key = new FGuid(t.Key), Version = t.Value });
+                }
+
+                provider = new MyFileProvider(paksDir, new VersionContainer(config.Game, optionOverrides: config.OptionsOverrides, customVersions: customVersions), config.EncryptionKeys, config.bDumpAssets, config.ObjectCacheSize);
                 provider.LoadVirtualPaths();
+                
                 var newestUsmap = GetNewestUsmap(new DirectoryInfo("mappings"));
                 if (newestUsmap != null) {
                     var usmap = new FileUsmapTypeMappingsProvider(newestUsmap.FullName);
@@ -326,8 +333,8 @@ namespace BlenderUmap {
                 return;
             }
             if (actor.TryGetValue(out UObject partition, "WorldPartition")
-                && partition.TryGetValue(out UObject runtineHash, "RuntimeHash")
-                && runtineHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
+                && partition.TryGetValue(out UObject runtimeHash, "RuntimeHash")
+                && runtimeHash.TryGetValue(out FStructFallback[] streamingGrids, "StreamingGrids")) {
                 FStructFallback grid = null;
                 foreach (var t in streamingGrids) {
                     if (t.TryGetValue(out FName name, "GridName")) {
@@ -359,12 +366,29 @@ namespace BlenderUmap {
                 return;
             }
 
-            var staticMeshComp = actor.GetOrDefault<UObject>("StaticMeshComponent", null); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+            UObject staticMeshComp = null;
+            actor.TryGetValue(out staticMeshComp, "StaticMeshComponent", "RootComponent", "Component"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
             if (actor is UInstancedStaticMeshComponent && staticMeshComp == null) {
                 staticMeshComp = actor;
             }
 
+            #region AWayOut
+            if (provider.Versions.Game == EGame.GAME_AWayOut) {
+                switch (actor.ExportType) {
+                    case "BP_AutoInstancer_C": {
+                        var blueprintCreatedComponents = actor.GetOrDefault<FPackageIndex[]>("BlueprintCreatedComponents", Array.Empty<FPackageIndex>());
+                        foreach (var createdComponent in blueprintCreatedComponents) {
+                            ProcessActor(createdComponent.Load(), lights, comps, loadedLevels);
+                        }
+                        return;
+                    }
+                }
+            }
+            #endregion
+
             if (staticMeshComp == null) return;
+            
+            // handle BP_PropArray_C properly
 
             // region mesh
             var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
@@ -391,6 +415,56 @@ namespace BlenderUmap {
 
                 }
             }
+
+            #region AWayOut
+            var aWayOutInstancedArrayMeshes = new List<JArray>();
+            if (provider.Versions.Game == EGame.GAME_AWayOut) {
+                if (actor.ExportType == "BP_PropArray_C") {
+                    var copiesX = actor.GetOrDefault<int>("CopiesX", 0);
+                    var copiesY = actor.GetOrDefault<int>("CopiesY", 0);
+                    var props = actor.GetOrDefault<FStructFallback[]>("Props", Array.Empty<FStructFallback>());
+                    foreach (var prop in props) { // we can support multiple can we?
+                        var prop_mesh = prop.GetOrDefault<FPackageIndex>("Mesh_2_BB037D5E40D364B0D17ED1BE5B3EFA55",
+                            new FPackageIndex());
+                        mesh = prop_mesh;
+                        var prop_transform = prop.GetOrDefault<FTransform>(
+                            "CustomTransform_7_289434E64DE1EDB1E3FE6E9F6D2E263D",
+                            new FTransform());
+                        var bounds = mesh.Load<UStaticMesh>().RenderData.Bounds.BoxExtent;
+
+                        // create self
+                        //here
+                        var instCompMain = new JArray();
+                        instCompMain.Add(Vector(FVector.ZeroVector));
+                        instCompMain.Add(Rotator(FRotator.ZeroRotator));
+                        instCompMain.Add(Vector(FVector.OneVector));
+                        aWayOutInstancedArrayMeshes.Add(instCompMain);
+
+                        // create new actors based on copiesX and copiesY values  
+                        for (var x = 1; x < copiesX + 1; x++) {
+                            var instComp = new JArray();
+                            var translation = prop_transform.Translation + new FVector(x * bounds.X * 2, 0, 0);
+                            instComp.Add(Vector(translation));
+                            instComp.Add(Rotator(prop_transform.Rotation.Rotator()));
+                            instComp.Add(Vector(prop_transform.Scale3D));
+                            aWayOutInstancedArrayMeshes.Add(instComp);
+                        }
+
+                        for (var y = 1; y < copiesY + 1; y++) {
+                            var instComp = new JArray();
+                            var translation = prop_transform.Translation + new FVector(0, y * bounds.Y * 2, 0);
+                            instComp.Add(Vector(translation));
+                            instComp.Add(Rotator(prop_transform.Rotation.Rotator()));
+                            instComp.Add(Vector(prop_transform.Scale3D));
+                            aWayOutInstancedArrayMeshes.Add(instComp);
+                        }
+                        break;
+                    }
+                }
+            }
+            #endregion
+
+            if (mesh == null || mesh.IsNull) return;
             // endregion
 
             var matsObj = new JObject(); // matpath: [4x[str]]
@@ -487,6 +561,10 @@ namespace BlenderUmap {
                         instComps.Add(instComp);
                     }
             }
+
+            if (provider.Versions.Game == EGame.GAME_AWayOut) {
+                aWayOutInstancedArrayMeshes.ForEach(x => instComps.Add(x)) ;
+            }
         }
 
         public static void AddToArray(JArray array, FPackageIndex index) {
@@ -499,6 +577,7 @@ namespace BlenderUmap {
         }
 
         private static void ExportTexture(FPackageIndex index) {
+            // return;
             if (NoExport) return;
             if (index.IsNull) return;
             var resolved = index.ResolvedObject;
@@ -513,26 +592,23 @@ namespace BlenderUmap {
             ThreadPool.QueueUserWorkItem(_ => {
                 FileStream stream;
                 lock (MeshLock) {
-                    if (output.Exists) {
-                        Log.Debug("Texture already exists, skipping: {0}", output.FullName);
+                    if (output.Exists)
                         return;
-                    }
-                    Interlocked.Increment(ref ThreadWorkCount);
                     stream = output.OpenWrite();
+                    Interlocked.Increment(ref ThreadWorkCount);
                 }
-
-                var obj = index.LoadAsync().ConfigureAwait(false).GetAwaiter().GetResult(); // does this do something?
-                if (obj is not UTexture2D texture) {
-                    return;
-                }
-                // Interlocked.Increment(ref ThreadWorkCount);
-                Log.Information("Saving texture to {0}", output.FullName);
                 // CUE4Parse only reads the first FTexturePlatformData and drops the rest
                 try {
+                    var obj = index.Load(); // does this do something?
+                    if (obj is not UTexture2D texture) {
+                        Interlocked.Decrement(ref ThreadWorkCount); // #FIXME creates empty file
+                        return;
+                    }
+                    Log.Information("Saving texture to {0}", output.FullName);
                     var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                     using var image = texture.Decode(firstMip);
                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-                    data.SaveTo(stream);
+                    stream.Write(data.AsSpan());
                     stream.Close();
                     Interlocked.Decrement(ref ThreadWorkCount);
                 }
@@ -807,6 +883,7 @@ namespace BlenderUmap {
         [JsonProperty("UEVersion")]
         public EGame Game = EGame.GAME_UE4_LATEST;
         public Dictionary<string, bool> OptionsOverrides = new Dictionary<string, bool>();
+        public Dictionary<string, int> CustomVersionOverrides = new Dictionary<string, int>();
         public List<EncryptionKey> EncryptionKeys = new();
         public bool bDumpAssets = false;
         public int ObjectCacheSize = 100;
