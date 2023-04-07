@@ -406,11 +406,13 @@ namespace BlenderUmap {
                     if (mesh == null) {
                         // look in parent struct if not found
                         var super = actorBlueprint.SuperStruct.Load<UBlueprintGeneratedClass>();
-                        foreach (var actorExp in super.Owner.GetExports()) {
-                            if (actorExp.ExportType != "FortKillVolume_C" && (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
-                                break;
+                        if (super != null)
+                            foreach (var actorExp in super.Owner.GetExports()) {
+                                if (actorExp.ExportType != "FortKillVolume_C" &&
+                                    (mesh = actorExp.GetOrDefault<FPackageIndex>("StaticMesh")) != null) {
+                                    break;
+                                }
                             }
-                        }
                     }
 
                 }
@@ -595,6 +597,7 @@ namespace BlenderUmap {
                     if (output.Exists) {
                         Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                         return;
+                    }
                     stream = output.OpenWrite();
                     Interlocked.Increment(ref ThreadWorkCount);
                 }
@@ -657,6 +660,7 @@ namespace BlenderUmap {
                 }
             }
         }
+        
 
         public static DirectoryInfo GetExportDir(UObject exportObj) => GetExportDir(exportObj.Owner);
 
