@@ -591,8 +591,9 @@ namespace BlenderUmap {
             // char[] fourCC = config.bExportToDDSWhenPossible ? GetDDSFourCC(texture) : null;
             ThreadPool.QueueUserWorkItem(_ => {
                 FileStream stream;
-                lock (MeshLock) {
-                    if (output.Exists)
+                lock (TextureLock) {
+                    if (output.Exists) {
+                        Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                         return;
                     stream = output.OpenWrite();
                     Interlocked.Increment(ref ThreadWorkCount);
