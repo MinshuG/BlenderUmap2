@@ -63,27 +63,7 @@ namespace BlenderUmap {
             }
             return false;
         }
-
-        // public override async Task<UObject?> TryLoadObjectAsync(string? objectPath)
-        // {
-        //     if (objectPath == null || objectPath.Equals("None", IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return null;
-        //     var packagePath = objectPath;
-        //     string objectName;
-        //     var dotIndex = packagePath.IndexOf('.');
-        //     if (dotIndex == -1) // use the package name as object name
-        //     {
-        //         objectName = packagePath.SubstringAfterLast('/');
-        //     }
-        //     else // packagePath.objectName
-        //     {
-        //         objectName = packagePath.Substring(dotIndex + 1);
-        //         packagePath = packagePath.Substring(0, dotIndex);
-        //     }
-        //
-        //     var pkg = await TryLoadPackageAsync(packagePath).ConfigureAwait(false);
-        //     return pkg?.GetExportOrNull(objectName, IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-        // }
-        //
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool TryLoadObject(string? objectPath, out UObject export)
         {

@@ -96,7 +96,7 @@ namespace BlenderUmap {
                     provider.MappingsContainer = usmap;
                     Log.Information("Loaded mappings from {0}", newestUsmap.FullName);
                 }
-
+                
                 var pkg = ExportAndProduceProcessed(config.ExportPackage, new List<string>());
                 if (pkg == null) Environment.Exit(1); // prevent addon from importing previously exported maps
 
@@ -293,13 +293,21 @@ namespace BlenderUmap {
             // }
         }
 
-        public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels) {
-
-            var instanceComps = actor.GetOrDefault("InstanceComponents", Array.Empty<FPackageIndex>());
-            foreach (var instanceComp in instanceComps) {
-                if (instanceComp == null || instanceComp.IsNull) continue;
-                var instanceActor = instanceComp.Load();
-                ProcessActor(instanceActor, lights, comps, loadedLevels);
+        public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels, FTransform parentTransform = default) {
+            if (parentTransform == default) parentTransform = FTransform.Identity;
+            if (actor.TryGetValue(out FPackageIndex[] instanceComps, "InstanceComponents", "MergedMeshComponents", "BlueprintCreatedComponents")) {
+                var root = actor.GetOrDefault<UObject>("RootComponent", new UObject());
+                var relativeLocation = root.GetOrDefault<FVector>("RelativeLocation", FVector.ZeroVector);
+                var relativeRotation = root.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
+                var relativeScale = root.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+                
+                var transform = new FTransform(relativeRotation, relativeLocation, relativeScale);
+                
+                foreach (var instanceComp in instanceComps) {
+                    if (instanceComp == null || instanceComp.IsNull) continue;
+                    var instanceActor = instanceComp.Load();
+                    ProcessActor(instanceActor, lights, comps, loadedLevels, transform);
+                }
             }
 
             if (actor is ALight) {
@@ -468,7 +476,9 @@ namespace BlenderUmap {
 
             if (mesh == null || mesh.IsNull) return;
             // endregion
-
+            
+            // if (mesh == null || mesh.IsNull) return; // having a mesh is not necessary it could just be a root component or is does it?
+            
             var matsObj = new JObject(); // matpath: [4x[str]]
             var textureDataArr = new JArray();
             var materials = new List<Mat>();
@@ -500,7 +510,7 @@ namespace BlenderUmap {
                     var mat = materials[i];
                     if (material != null && overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false}) {
                         // var matIndex = overrideMaterials != null && i < overrideMaterials.Count && overrideMaterials[i] is {IsNull: false} ? overrideMaterials[i] : material;
-                        mat.Material = overrideMaterials[i].ResolvedObject; //matIndex.ResolvedObject;
+                        mat.Material = overrideMaterials[i].ResolvedObject; // matIndex.ResolvedObject;
                     }
                     mat.PopulateTextures();
                     mat.AddToObj(matsObj);
@@ -524,6 +534,10 @@ namespace BlenderUmap {
             var loc = staticMeshComp.GetOrDefault<FVector>("RelativeLocation");
             var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
             var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
+
+            var localTransform = new FTransform(rot, loc, scale); // use matrix
+            var finalTransform = localTransform; //.GetRelativeTransform(parentTransform); // correct? // TODO: test with rotation
+            finalTransform.Translation += parentTransform.Translation;
             // identifiers
             var comp = new JArray();
             comps.Add(comp);
@@ -534,9 +548,9 @@ namespace BlenderUmap {
             comp.Add(PackageIndexToDirPath(mesh));
             comp.Add(matsObj);
             comp.Add(textureDataArr);
-            comp.Add(Vector(loc)); // /Script/Engine.SceneComponent:RelativeLocation
-            comp.Add(Rotator(rot)); // /Script/Engine.SceneComponent:RelativeRotation
-            comp.Add(Vector(scale)); // /Script/Engine.SceneComponent:RelativeScale3D
+            comp.Add(Vector(finalTransform.Translation)); // /Script/Engine.SceneComponent:RelativeLocation
+            comp.Add(Rotator(finalTransform.Rotation.Rotator())); // /Script/Engine.SceneComponent:RelativeRotation
+            comp.Add(Vector(finalTransform.Scale3D)); // /Script/Engine.SceneComponent:RelativeScale3D
             comp.Add(children);
 
             int LightIndex = 0;
@@ -700,9 +714,7 @@ namespace BlenderUmap {
             return String.Compare(pkgPath.SubstringAfterLast('/'), objectName, StringComparison.OrdinalIgnoreCase) == 0 ? pkgPath : pkgPath + '/' + objectName;
         }
 
-        public static string PackageIndexToDirPath(FPackageIndex obj) {
-            return PackageIndexToDirPath(obj?.ResolvedObject);
-        }
+        public static string PackageIndexToDirPath(FPackageIndex obj) => PackageIndexToDirPath(obj?.ResolvedObject);
 
         public static JArray Vector(FVector vector) => new() {vector.X, vector.Y, vector.Z};
         public static JArray Rotator(FRotator rotator) => new() {rotator.Pitch, rotator.Yaw, rotator.Roll};
