@@ -615,21 +615,20 @@ namespace BlenderUmap {
                     if (output.Exists) {
                         Log.Debug("Texture already exists, skipping: {0}", output.FullName);
                         return;
+                    }
                     stream = output.OpenWrite();
                     Interlocked.Increment(ref ThreadWorkCount);
                 }
 
-                var obj = index.LoadAsync().ConfigureAwait(false).GetAwaiter().GetResult(); // does this do something?
-                if (obj is not UTexture2D texture) {
-                    stream.Close();
-                    output.Delete();
-                    Interlocked.Decrement(ref ThreadWorkCount);
-                    return;
-                }
-                // Interlocked.Increment(ref ThreadWorkCount);
-                Log.Information("Saving texture to {0}", output.FullName);
-                // CUE4Parse only reads the first FTexturePlatformData and drops the rest
                 try {
+                    var obj = index.Load();
+                    if (obj is not UTexture2D texture) {
+                        stream.Close();
+                        output.Delete();
+                        Interlocked.Decrement(ref ThreadWorkCount);
+                        return;
+                    }
+                    Log.Information("Saving texture to {0}", output.FullName);
                     var firstMip = texture.GetFirstMip(); // Modify this if you want lower res textures
                     using var image = texture.Decode(firstMip);
                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
