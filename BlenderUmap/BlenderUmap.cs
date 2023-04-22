@@ -237,7 +237,7 @@ namespace BlenderUmap {
             }
 
             // var pkg = world.Owner;
-            string pkgName = provider.CompactFilePath(obj.Owner.Name).SubstringAfter("/");
+            string pkgName = provider.CompactFilePath(obj.Owner!.Name).SubstringAfter("/");
             var file = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".processed.json"));
             file.Directory.Create();
             Log.Information("Writing to {0}", file.FullName);
@@ -245,6 +245,7 @@ namespace BlenderUmap {
             using var writer = file.CreateText();
             var file2 = new FileInfo(Path.Combine(MyFileProvider.JSONS_FOLDER.ToString(), pkgName + ".lights.processed.json"));
             file2.Directory.Create();
+            Log.Information("Writing to {0}", file2.FullName);
 
             using var writer2 = file2.CreateText();
 #if DEBUG
@@ -259,8 +260,6 @@ namespace BlenderUmap {
         }
 
         public static void ProcessStreamingGrid(FStructFallback grid, JArray children, List<string> loadedLevels) {
-            var tasks = new List<Task>();
-            var bagged = new ConcurrentBag<string>();
             if (grid.TryGetValue(out FStructFallback[] gridLevels, "GridLevels")) {
                 foreach (var level in gridLevels) {
                     if (level.TryGetValue<FStructFallback[]>(out var levelCells, "LayerCells")) {
@@ -557,15 +556,15 @@ namespace BlenderUmap {
             comp.Add(Vector(finalTransform.Scale3D)); // /Script/Engine.SceneComponent:RelativeScale3D
             comp.Add(children);
 
-            int LightIndex = 0;
+            int lightIndex = 0;
             if (CheckIfHasLights(actor.Class.Outer?.Owner, out var lightinfo)) {
                 var infor = new LightInfo2() {
                     Props = lightinfo.ToArray()
                 };
                 lights.Add(infor);
-                LightIndex = lights.Count;
+                lightIndex = lights.Count;
             }
-            comp.Add(LightIndex);
+            comp.Add(lightIndex);
 
             // create instances
             var instComps = new JArray();
@@ -597,7 +596,6 @@ namespace BlenderUmap {
         }
 
         private static void ExportTexture(FPackageIndex index) {
-            // return;
             if (NoExport) return;
             if (index.IsNull) return;
             var resolved = index.ResolvedObject;
@@ -778,6 +776,20 @@ namespace BlenderUmap {
             }
 
             public void PopulateTextures() {
+                var loadedMainObject = Material?.Load();
+                if (loadedMainObject == null) return;
+                
+                // var fullPath = $"{Material.Package.Name}.{Material.Name}";
+                var optionalPackagePath = Material.Package.Name + ".o.uasset";
+
+                if (provider.TryLoadPackage(optionalPackagePath, out var editorAsset))
+                {
+                    var editorData = editorAsset.GetExportOrNull(loadedMainObject.Name + "EditorOnlyData");
+                     if (editorData != null)
+                     {
+                         loadedMainObject.Properties.AddRange(editorData.Properties);
+                     }
+                }
                 PopulateTextures(Material?.Load());
             }
 
@@ -876,7 +888,7 @@ namespace BlenderUmap {
                 #endregion
 
                 if (material is UMaterialInstance mi) {
-                    var staticParameters = mi.StaticParameters;
+                    var staticParameters = mi.GetOrDefault("StaticParameters", mi.GetOrDefault<FStaticParameterSet>("StaticParametersRuntime"));;
                     if (staticParameters != null)
                         foreach (var switchParameter in staticParameters.StaticSwitchParameters) {
                             if (!_scalarParameterValues.ContainsKey(switchParameter.Name))

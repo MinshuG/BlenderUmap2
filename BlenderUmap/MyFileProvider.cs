@@ -85,44 +85,6 @@ namespace BlenderUmap {
             return await TryLoadPackageAsync(file).ConfigureAwait(false);
         }
 
-        // public override async Task<IPackage?> TryLoadPackageAsync(GameFile file)
-        // {
-        //     if (!file.IsUE4Package)
-        //         return null;
-        //     Files.TryGetValue(file.PathWithoutExtension + ".uexp", out var uexpFile);
-        //     Files.TryGetValue(file.PathWithoutExtension + ".ubulk", out var ubulkFile);
-        //     Files.TryGetValue(file.PathWithoutExtension + ".uptnl", out var uptnlFile);
-        //     var uassetTask = file.TryCreateReaderAsync().ConfigureAwait(false);
-        //     var uexpTask = uexpFile?.TryCreateReaderAsync().ConfigureAwait(false);
-        //     var lazyUbulk = ubulkFile != null ? new Lazy<FArchive?>(() => ubulkFile.TryCreateReader(out var reader) ? reader : null) : null;
-        //     var lazyUptnl = uptnlFile != null ? new Lazy<FArchive?>(() => uptnlFile.TryCreateReader(out var reader) ? reader : null) : null;
-        //     var uasset = await uassetTask;
-        //     if (uasset == null)
-        //         return null;
-        //     var uexp = uexpTask != null ? await uexpTask.Value : null;
-        //
-        //     try
-        //     {
-        //         if (file is FPakEntry or OsGameFile)
-        //         {
-        //             return new Package(uasset, uexp, lazyUbulk, lazyUptnl, this, MappingsForThisGame, UseLazySerialization);
-        //         }
-        //
-        //         if (file is FIoStoreEntry ioStoreEntry)
-        //         {
-        //             var globalData = ((IVfsFileProvider) this).GlobalData;
-        //             return globalData != null ? new IoPackage(uasset, globalData, ioStoreEntry.IoStoreReader.ContainerHeader, lazyUbulk, lazyUptnl, this, MappingsForThisGame) : null;
-        //         }
-        //
-        //         return null;
-        //     }
-        //     catch (Exception e)
-        //     {
-        //         Log.Error(e, "Failed to load package " + file);
-        //         return null;
-        //     }
-        // }
-
         public void DumpJson(IPackage package) {
             var output = new FileInfo(Path.Combine(Program.GetExportDir(package).ToString(), package.Name.SubstringAfterLast("/") + ".json"));
             // if (output.Exists && output.Length > 0)
