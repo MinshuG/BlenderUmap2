@@ -2,14 +2,23 @@
 BlenderUmap v0.4.1
 (C) amrsatrio. All rights reserved.
 """
+from typing import Callable
 import bpy
 import json
 import os
 import time
 from math import *
 
-from .psk.reader import do_psk_import
 from .piana import *
+
+
+def get_importer() -> Callable[[str, bpy.types.Context], bpy.types.Object]:
+    if bpy.context.preferences.addons[__package__].preferences.get("bUseExperimentalPskImporter", False):
+        from .psk.reader import do_psk_import
+        return do_psk_import
+    else:
+        from io_import_scene_unreal_psa_psk_280 import pskimport
+        return pskimport
 
 # ---------- END INPUTS, DO NOT MODIFY ANYTHING BELOW UNLESS YOU NEED TO ----------
 def import_umap(processed_map_path: str,
@@ -19,6 +28,8 @@ def import_umap(processed_map_path: str,
 
     if reuse_maps and map_collection:
         return place_map(map_collection, into_collection)
+
+    importer = get_importer()
 
     map_collection = bpy.data.collections.new(map_name)
     map_collection_inst = place_map(map_collection, into_collection)
@@ -120,7 +131,8 @@ def import_umap(processed_map_path: str,
         elif os.path.exists(full_mesh_path + ".pskx"):
             full_mesh_path += ".pskx"
 
-        if imported := do_psk_import(full_mesh_path, bpy.context):
+        if imported := importer(full_mesh_path, bpy.context):
+            imported = bpy.context.active_object
             apply_ob_props(imported)
             imported.data.name = key
             bpy.ops.object.shade_smooth()

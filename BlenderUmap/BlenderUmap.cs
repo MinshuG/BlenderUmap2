@@ -891,8 +891,7 @@ namespace BlenderUmap {
                     var staticParameters = mi.GetOrDefault("StaticParameters", mi.GetOrDefault<FStaticParameterSet>("StaticParametersRuntime"));;
                     if (staticParameters != null)
                         foreach (var switchParameter in staticParameters.StaticSwitchParameters) {
-                            if (!_scalarParameterValues.ContainsKey(switchParameter.Name))
-                                _scalarParameterValues[switchParameter.Name] = switchParameter.Value ? 1 : 0;
+                            _scalarParameterValues.TryAdd(switchParameter.Name, switchParameter.Value ? 1 : 0);
                         }
                     if (mi.Parent != null) {
                         PopulateTextures(mi.Parent);
