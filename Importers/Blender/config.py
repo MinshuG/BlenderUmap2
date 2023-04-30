@@ -114,7 +114,6 @@ def textures_to_mapping(context: bpy.context) -> TextureMapping:
 
 
 class Config:
-    Documentation: str = "https://github.com/Amrsatrio/BlenderUmap/blob/master/README.md"
     PaksDirectory: str
     ExportPath: str
     UEVersion: str
@@ -141,23 +140,23 @@ class Config:
         self.bReadMaterials = sc.readmats
         self.bExportToDDSWhenPossible = sc.bExportToDDSWhenPossible
         self.bExportBuildingFoundations = sc.bExportBuildingFoundations
+        self.bExportHiddenObjects = sc.bExportHiddenObjects
         self.ExportPackage = sc.package
         self.Textures = textures_to_mapping(sc)
         self.CustomOptions = sc.custom_options
 
     def to_dict(self) -> dict:
-        result: dict = {"_Documentation": self.Documentation,
-                        "PaksDirectory": self.PaksDirectory,
+        result: dict = {"PaksDirectory": self.PaksDirectory,
                         "ExportPath": self.ExportPath,
                         "UEVersion": self.CustomVersion if self.bUseCustomEngineVer else self.UEVersion,
                         "bDumpAssets": self.bDumpAssets, "ObjectCacheSize": self.ObjectCacheSize,
                         "bReadMaterials": self.bReadMaterials,
                         "bExportToDDSWhenPossible": self.bExportToDDSWhenPossible,
                         "bExportBuildingFoundations": self.bExportBuildingFoundations,
+                        "bExportHiddenObjects": self.bExportHiddenObjects,
                         "ExportPackage": self.ExportPackage,
                         "EncryptionKeys": aeskeys_from_list(self.EncryptionKeys),
                         "Textures": textures_to_mapping(bpy.context.scene).to_dict(),
-
                         }
         if bpy.context.scene.bUseCustomOptions:
             result["OptionsOverrides"] = { x.name : x.value for x in self.CustomOptions }
@@ -187,6 +186,7 @@ class Config:
         sc.ObjectCacheSize = data["ObjectCacheSize"]
         sc.readmats = data["bReadMaterials"]
         sc.bExportToDDSWhenPossible = data["bExportToDDSWhenPossible"]
+        sc.bExportHiddenObjects = data.get("bExportHiddenObjects", False)
         sc.bExportBuildingFoundations = data["bExportBuildingFoundations"]
         sc.package = data["ExportPackage"]
 

@@ -46,7 +46,8 @@ namespace BlenderUmap {
                 }
             }
 
-            SubmitKeys(keysToSubmit);
+            var mounted = SubmitKeys(keysToSubmit);
+            Log.Information("Successfully mounted {0} containers", mounted);
         }
 
         public override bool TryLoadPackage(string path, out IPackage package) {

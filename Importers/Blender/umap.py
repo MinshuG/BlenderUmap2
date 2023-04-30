@@ -243,8 +243,8 @@ def import_material(ob: bpy.types.Object,
 
         print("Material imported")
 
-    # if m_idx < len(ob.data.materials):
-    #     ob.data.materials[m_idx] = m
+    if ob.type == "ARMATURE": ob = ob.children[0]
+
     found_index = find_mat_index(ob.data.materials, m.name[:-4])  # remove .mat
     if found_index is None:
         if m_idx < len(ob.data.materials):

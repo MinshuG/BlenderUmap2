@@ -246,6 +246,7 @@ class VIEW3D_PT_BlenderUmapMain(BlenderUmapPanel):
         col.prop(context.scene, "readmats")
         col.prop(context.scene, "bExportToDDSWhenPossible")
         col.prop(context.scene, "bExportBuildingFoundations")
+        col.prop(context.scene, "bExportHiddenObjects")
         col.prop(context.scene, "bdumpassets")
         col.prop(context.scene, "ObjectCacheSize")
         col.separator()
@@ -864,6 +865,13 @@ def register():
         subtype="NONE",
     )
 
+    bpy.types.Scene.bExportHiddenObjects = BoolProperty(
+        name="Export hidden actors",
+        description="Export hidden actors e.g. actors with bHidden=True",
+        default=False,
+        subtype="NONE",
+    )
+
     bpy.types.Scene.bdumpassets = BoolProperty(
         name="Dump Assets",
         description="Save assets as JSON format",
@@ -927,6 +935,7 @@ def unregister():
     del sc.readmats
     del sc.bExportToDDSWhenPossible
     del sc.bExportBuildingFoundations
+    del sc.bExportHiddenObjects
     del sc.bdumpassets
     del sc.ObjectCacheSize
     del sc.reuse_maps

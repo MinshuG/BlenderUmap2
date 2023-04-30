@@ -58,7 +58,7 @@ def read_psk(path: str) -> Psk:
             elif section.name == b'VTXNORMS':
                 psk.vertex_normals = _read_types(fp, Vector3, section)
             else:
-                raise RuntimeError(f'Unrecognized section "{section.name} at position {15:fp.tell()}"')
+                print(f'Unrecognized section "{section.name} at position {fp.tell()}"')
     return psk
 
 def import_psk(psk: Psk, context, options: PskImportOptions) -> Tuple[List[str], bpy.types.Object]:

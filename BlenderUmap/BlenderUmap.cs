@@ -27,6 +27,8 @@ using CUE4Parse_Conversion;
 using CUE4Parse_Conversion.Meshes;
 using CUE4Parse_Conversion.Textures;
 using CUE4Parse.UE4.Assets.Exports.Component.StaticMesh;
+using CUE4Parse.UE4.Assets.Exports.Mesh;
+using CUE4Parse.UE4.Assets.Exports.SkeletalMesh;
 using CUE4Parse.UE4.Objects.Core.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -291,6 +293,9 @@ namespace BlenderUmap {
         }
 
         public static void ProcessActor(UObject actor, List<LightInfo2> lights, JArray comps, List<string> loadedLevels, FTransform parentTransform = default) {
+            if (actor.TryGetValue(out bool bHidden, "bHidden", "bHiddenInGame") && bHidden && !config.bExportHiddenObjects)
+                return;
+
             if (parentTransform == default) parentTransform = FTransform.Identity;
             if (actor.TryGetValue(out FPackageIndex[] instanceComps, "InstanceComponents", "MergedMeshComponents", "BlueprintCreatedComponents")) {
                 var root = actor.GetOrDefault<UObject>("RootComponent", new UObject());
@@ -371,8 +376,7 @@ namespace BlenderUmap {
                 return;
             }
 
-            UObject staticMeshComp = null;
-            actor.TryGetValue(out staticMeshComp, "StaticMeshComponent", "RootComponent", "Component"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+            actor.TryGetValue(out UObject staticMeshComp, "StaticMeshComponent", "SkeletalMeshComponent", "RootComponent", "Component"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
             if (actor is UInstancedStaticMeshComponent && staticMeshComp == null) {
                 staticMeshComp = actor;
             }
@@ -396,7 +400,7 @@ namespace BlenderUmap {
             // handle BP_PropArray_C properly
 
             // region mesh
-            var mesh = staticMeshComp!.GetOrDefault<FPackageIndex>("StaticMesh"); // /Script/Engine.StaticMeshComponent:StaticMesh
+            var mesh = staticMeshComp!.GetOrDefault("StaticMesh", staticMeshComp!.GetOrDefault<FPackageIndex>("SkeletalMesh")); // /Script/Engine.StaticMeshComponent:StaticMesh
 
             if (mesh == null || mesh.IsNull) { // read the actor class to find the mesh
                 var actorBlueprint = actor.Class;
@@ -538,9 +542,14 @@ namespace BlenderUmap {
             var rot = staticMeshComp.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator);
             var scale = staticMeshComp.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector);
 
-            var localTransform = new FTransform(rot, loc, scale); // use matrix
-            var finalTransform = localTransform; //.GetRelativeTransform(parentTransform); // correct? // TODO: test with rotation
-            finalTransform.Translation += parentTransform.Translation;
+            if (staticMeshComp.TryGetValue(out UObject attachParent, "AttachParent")) {
+                parentTransform = new FTransform(attachParent.GetOrDefault<FRotator>("RelativeRotation", FRotator.ZeroRotator),
+                    attachParent.GetOrDefault<FVector>("RelativeLocation"), attachParent.GetOrDefault<FVector>("RelativeScale3D", FVector.OneVector));
+            }
+
+            var localTransform = new FTransform(rot, loc, scale);
+            var finalTransform = new FTransform(parentTransform.ToMatrixWithScale() * localTransform.ToMatrixWithScale());
+
             // identifiers
             var comp = new JArray();
             comps.Add(comp);
@@ -640,39 +649,59 @@ namespace BlenderUmap {
 
         public static void ExportMesh(FPackageIndex mesh, List<Mat> materials) {
             if (NoExport || mesh == null || mesh.IsNull) return;
-            var meshExport = mesh?.Load<UStaticMesh>();
-            if (meshExport == null) return;
-            var output = new FileInfo(Path.Combine(GetExportDir(meshExport).ToString(), meshExport.Name + ".pskx"));
+            var exportObj = mesh.Load<UObject>();
+            if (!(exportObj is IMesh meshExport) || meshExport == null) return;
+            var output = new FileInfo(Path.Combine(GetExportDir(exportObj).ToString(), exportObj.Name + ".pskx"));
 
-            ThreadPool.QueueUserWorkItem(_ => {
-                    FileStream stream;
-                    lock (MeshLock) {
-                        if (output.Exists) return;
-                        Interlocked.Increment(ref ThreadWorkCount);
-                        stream = output.OpenWrite();
+            ThreadPool.QueueUserWorkItem(delegate {
+                FileStream stream;
+                lock (MeshLock) {
+                    if (output.Exists) return;
+                    Interlocked.Increment(ref ThreadWorkCount);
+                    stream = output.OpenWrite();
+                }
+
+                try {
+                    MeshExporter exporter;
+                    if (meshExport is UStaticMesh staticMesh) {
+                        exporter = new MeshExporter(staticMesh,
+                            new ExporterOptions() { SocketFormat = ESocketFormat.None }, false);
                     }
-                    try {
-                        Log.Information("Saving mesh to {0}", output.FullName);
-                        var exporter = new MeshExporter(meshExport, new ExporterOptions(){ SocketFormat = ESocketFormat.None }, false);
-                        if (exporter.MeshLods.Count == 0) {
-                            Log.Warning("Mesh '{0}' has no LODs", meshExport.Name);
-                            stream.Close();
-                            output.Delete();
-                            Interlocked.Decrement(ref ThreadWorkCount);
-                            return;
-                        }
-
-                        stream.Write(exporter.MeshLods.First().FileData);
+                    else if (meshExport is USkeletalMesh skeletalMesh) {
+                        exporter = new MeshExporter(skeletalMesh,
+                            new ExporterOptions() { SocketFormat = ESocketFormat.None }, false);
+                    }
+                    else {
+                        Log.Warning("Unknown mesh type: {0}", exportObj.ExportType);
                         stream.Close();
+                        output.Delete();
                         Interlocked.Decrement(ref ThreadWorkCount);
+                        return;
                     }
-                    // catch (IOException) { Interlocked.Decrement(ref ThreadWorkCount); } // two threads trying to write same mesh
-                    catch (Exception e) { stream.Close(); Log.Warning(e, "Failed to save mesh"); Interlocked.Decrement(ref ThreadWorkCount); }
+
+                    Log.Information("Saving {0} to {1}", exportObj.ExportType, output.FullName);
+                    if (exporter.MeshLods.Count == 0) {
+                        Log.Warning("Mesh '{0}' has no LODs", exportObj.Name);
+                        stream.Close();
+                        output.Delete();
+                        Interlocked.Decrement(ref ThreadWorkCount);
+                        return;
+                    }
+
+                    stream.Write(exporter.MeshLods.First().FileData);
+                    stream.Close();
+                    Interlocked.Decrement(ref ThreadWorkCount);
+                }
+                catch (Exception e) {
+                    stream.Close();
+                    Log.Warning(e, "Failed to save mesh");
+                    Interlocked.Decrement(ref ThreadWorkCount);
+                }
             });
-
-
+            
             if (config.bReadMaterials) {
                 var matObjs = meshExport.Materials;
+
                 if (matObjs != null) {
                     foreach (var material in matObjs) {
                         materials.Add(new Mat(material));
@@ -963,6 +992,7 @@ namespace BlenderUmap {
         public bool bReadMaterials = true;
         public bool bExportToDDSWhenPossible = true;
         public bool bExportBuildingFoundations = true;
+        public bool bExportHiddenObjects = false;
         public string ExportPackage;
         public TextureMapping Textures = new();
     }
