@@ -31,6 +31,7 @@ def main(context, onlyimport=False):
     reuse_meshes = sc.reuse_mesh
     use_cube_as_fallback = sc.use_cube_as_fallback
     use_generic_shader = sc.use_generic_shader
+    use_generic_shader_as_fallback = sc.use_generic_shader_as_fallback
     data_dir = sc.exportPath
     addon_dir = os.path.dirname(os.path.splitext(__file__)[0])
 
@@ -61,7 +62,7 @@ def main(context, onlyimport=False):
         )
 
     tex_shader = None
-    if use_generic_shader:
+    if use_generic_shader or use_generic_shader_as_fallback:
         uvm = bpy.data.node_groups.get("UV Shader Mix")
         tex_shader = bpy.data.node_groups.get("Texture Shader")
 
@@ -121,6 +122,7 @@ def main(context, onlyimport=False):
             reuse_meshes,
             use_cube_as_fallback,
             use_generic_shader,
+            use_generic_shader_as_fallback,
             tex_shader,
             textures_to_mapping(bpy.context)
         )
@@ -260,6 +262,8 @@ class VIEW3D_PT_BlenderUmapMain(BlenderUmapPanel):
         col.prop(context.scene, "reuse_mesh", text="Reuse Meshes")
         col.prop(context.scene, "use_cube_as_fallback")
         col.prop(context.scene, "use_generic_shader")
+        if not context.scene.use_generic_shader:
+            col.prop(context.scene, "use_generic_shader_as_fallback")
 
         export_path_exists = os.path.exists(bpy.context.scene.exportPath)
         game_path_exists = os.path.exists(context.scene.Game_Path)
@@ -874,7 +878,7 @@ def register():
 
     bpy.types.Scene.bExportHiddenObjects = BoolProperty(
         name="Export hidden actors",
-        description="Export hidden actors e.g. actors with bHidden=True",
+        description="Export hidden actors e.g. actors with bHidden/bHiddenInGame=True",
         default=False,
         subtype="NONE",
     )
@@ -921,6 +925,13 @@ def register():
         subtype="NONE",
     )
 
+    bpy.types.Scene.use_generic_shader_as_fallback = BoolProperty(
+        name="Use Generic Shader As Fallback",
+        description="Use generic shader as fallback when shader is not found in EXPORT_DIR/shader/ or in current file. If unchecked empty shaders will be created with params from the material info.",
+        default=False,
+        subtype="NONE",
+    )
+
     bpy.types.Scene.exportPath = StringProperty(
         name="Export Path",
         description="Path to Export Folder",
@@ -955,6 +966,8 @@ def unregister():
     del sc.reuse_maps
     del sc.reuse_mesh
     del sc.use_cube_as_fallback
+    del sc.use_generic_shader
+    del sc.use_generic_shader_as_fallback
     del sc.exportPath
     del sc.bUseCustomOptions
 

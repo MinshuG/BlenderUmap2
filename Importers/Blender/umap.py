@@ -23,7 +23,10 @@ def get_importer() -> Callable[[str, bpy.types.Context], bpy.types.Object]:
 
 # ---------- END INPUTS, DO NOT MODIFY ANYTHING BELOW UNLESS YOU NEED TO ----------
 def import_umap(processed_map_path: str,
-                into_collection: bpy.types.Collection, data_dir: str, reuse_maps: bool, reuse_meshes: bool, use_cube_as_fallback: bool, use_generic_shader: bool, tex_shader, texture_mappings: TextureMapping) -> bpy.types.Object:
+                into_collection: bpy.types.Collection, data_dir: str, reuse_maps: bool,
+                reuse_meshes: bool, use_cube_as_fallback: bool, use_generic_shader: bool,
+                use_generic_shader_as_fallback: bool,
+                tex_shader, texture_mappings: TextureMapping) -> bpy.types.Object:
     map_name = processed_map_path[processed_map_path.rindex("/") + 1:]
     map_collection = bpy.data.collections.get(map_name)
 
@@ -92,7 +95,7 @@ def import_umap(processed_map_path: str,
         if child_comps and len(child_comps) > 0:
             for i, child_comp in enumerate(child_comps):
                 apply_ob_props(
-                    import_umap(child_comp, map_collection, data_dir, reuse_maps, reuse_meshes, use_cube_as_fallback, use_generic_shader, tex_shader, texture_mappings),
+                    import_umap(child_comp, map_collection, data_dir, reuse_maps, reuse_meshes, use_cube_as_fallback, use_generic_shader, use_generic_shader_as_fallback, tex_shader, texture_mappings),
                     name if i == 0 else ("%s_%d" % (name, i)))
 
             continue
@@ -145,7 +148,7 @@ def import_umap(processed_map_path: str,
 
             for m_idx, (m_path, m_textures) in enumerate(mats.items()):
                 if m_textures:
-                    import_material(imported, m_idx, m_path, td_suffix, m_textures, use_generic_shader, tex_shader, data_dir, texture_mappings)
+                    import_material(imported, m_idx, m_path, td_suffix, m_textures, use_generic_shader, use_generic_shader_as_fallback, tex_shader, data_dir, texture_mappings)
 
             if instanceData and len(instanceData) > 0: # remove the mesh
                 bpy.ops.object.delete()
@@ -178,6 +181,7 @@ def import_material(ob: bpy.types.Object,
                     suffix: str,
                     material_info: dict,
                     use_generic_shader: bool,
+                    use_generic_shader_as_fallback: bool,
                     tex_shader, data_dir, texture_mappings: TextureMapping) -> bpy.types.Material:
     # .mat is required to prevent conflicts with empty ones imported by PSK/PSA plugin
     m_name = os.path.basename(path + ".mat" + suffix)
@@ -199,7 +203,9 @@ def import_material(ob: bpy.types.Object,
         # m.blend_method = "OPAQUE"
         m.blend_method = "CLIP"
 
-        if use_generic_shader:
+        shader_name = material_info["ShaderName"]
+
+        if use_generic_shader or (use_generic_shader_as_fallback and not bpy.data.node_groups.get(shader_name, False)):
             def GetAnyValueOrDefault(keys, dicts, default=None):
                 for key in keys:
                     if key in dicts:
@@ -272,7 +278,6 @@ def import_material(ob: bpy.types.Object,
             else:
                 tree.links.new(group(material_info["TextureParams"], texture_mappings.UV1, [-100, 300], tex_shader).outputs[0], mat_out.inputs[0])
         else:
-            shader_name = material_info["ShaderName"]
             shader_node_group = create_node_group(shader_name, material_info.get("TextureParams", []), material_info.get("ScalerParams", []), material_info.get("VectorParams", []))
 
             # spawn the shader into material and connect it to output
@@ -424,6 +429,7 @@ if __name__ == "__main__":
     reuse_meshes = True
     use_cube_as_fallback = True
     use_generic_shader = True
+    use_generic_shader_as_fallback = False
 
     start = int(time.time() * 1000.0)
 
@@ -469,7 +475,7 @@ if __name__ == "__main__":
 
     # do it!
     with open(os.path.join(data_dir, "processed.json")) as file:
-        import_umap(json.loads(file.read()), import_collection, data_dir, reuse_maps, reuse_meshes, use_cube_as_fallback, use_generic_shader, tex_shader)
+        import_umap(json.loads(file.read()), import_collection, data_dir, reuse_maps, reuse_meshes, use_cube_as_fallback, use_generic_shader, use_generic_shader_as_fallback, tex_shader, TextureMapping())
 
     # go back to main scene
     bpy.context.window.scene = main_scene
