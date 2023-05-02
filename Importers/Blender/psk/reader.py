@@ -104,7 +104,7 @@ def import_psk(psk: Psk, context, options: PskImportOptions) -> Tuple[List[str],
 
     # TEXTURE COORDINATES
     data_index = 0
-    uv_layer = mesh_data.uv_layers.new(name='VTXW0000')
+    uv_layer = mesh_data.uv_layers.new(name='UV_SINGLE')
     for face_index, face in enumerate(psk.faces):
         if face_index in degenerate_face_indices:
             continue
@@ -119,7 +119,7 @@ def import_psk(psk: Psk, context, options: PskImportOptions) -> Tuple[List[str],
         wedge_index_offset = 0
         for extra_uv_index in range(extra_uv_channel_count):
             data_index = 0
-            uv_layer = mesh_data.uv_layers.new(name=f'EXTRAUV{extra_uv_index}')
+            uv_layer = mesh_data.uv_layers.new(name=f'EXTRAUVS{extra_uv_index}')
             for face_index, face in enumerate(psk.faces):
                 if face_index in degenerate_face_indices:
                     continue
