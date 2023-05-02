@@ -376,7 +376,7 @@ namespace BlenderUmap {
                 return;
             }
 
-            actor.TryGetValue(out UObject staticMeshComp, "StaticMeshComponent", "SkeletalMeshComponent", "RootComponent", "Component"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
+            actor.TryGetValue(out UObject staticMeshComp, "StaticMeshComponent", "SkeletalMeshComponent", "Component"); // /Script/Engine.StaticMeshActor:StaticMeshComponent or /Script/FortniteGame.BuildingSMActor:StaticMeshComponent
             if (actor is UInstancedStaticMeshComponent && staticMeshComp == null) {
                 staticMeshComp = actor;
             }
@@ -474,12 +474,11 @@ namespace BlenderUmap {
                 }
             }
             #endregion
-
-            if (mesh == null || mesh.IsNull) return;
             // endregion
-            
-            if (mesh == null || mesh.IsNull) return; // having a mesh is not necessary it could just be a root component or is does it?
-            
+
+            // do not in uncomment this required for FN's AdditionalWorlds to work
+            // if (mesh == null || mesh.IsNull) return; // having a mesh is not necessary it could just be a root component or is does it?
+
             var matsObj = new JObject(); // matpath: [4x[str]]
             var textureDataArr = new List<Dictionary<string, string>>();
             var materials = new List<Mat>();

@@ -9,6 +9,7 @@ import sys
 
 from bpy.types import Context
 from .config import Config
+from .texture import textures_to_mapping
 
 try:
     from .umap import import_umap, cleanup
@@ -29,6 +30,7 @@ def main(context, onlyimport=False):
     reuse_maps = sc.reuse_maps
     reuse_meshes = sc.reuse_mesh
     use_cube_as_fallback = sc.use_cube_as_fallback
+    use_generic_shader = sc.use_generic_shader
     data_dir = sc.exportPath
     addon_dir = os.path.dirname(os.path.splitext(__file__)[0])
 
@@ -58,15 +60,15 @@ def main(context, onlyimport=False):
             env=env_vars
         )
 
-    uvm = bpy.data.node_groups.get("UV Shader Mix")
-    tex_shader = bpy.data.node_groups.get("Texture Shader")
-
-    if not uvm or not tex_shader: # do we need this anymore?
-        create_node_groups()
-        # with bpy.data.libraries.load(os.path.join(addon_dir, "deps.blend")) as (data_from, data_to):
-        #     data_to.node_groups = data_from.node_groups
+    tex_shader = None
+    if use_generic_shader:
         uvm = bpy.data.node_groups.get("UV Shader Mix")
         tex_shader = bpy.data.node_groups.get("Texture Shader")
+
+        if not uvm or not tex_shader: # do we need this anymore?
+            create_node_groups()
+            uvm = bpy.data.node_groups.get("UV Shader Mix")
+            tex_shader = bpy.data.node_groups.get("Texture Shader")
 
     # append all the node groups from blend files in the deps folder
     shader_folder = os.path.join(data_dir, "shader")
@@ -118,7 +120,9 @@ def main(context, onlyimport=False):
             reuse_maps,
             reuse_meshes,
             use_cube_as_fallback,
+            use_generic_shader,
             tex_shader,
+            textures_to_mapping(bpy.context)
         )
         print(f"Imported in {time.time() - stime} seconds")
 
@@ -255,6 +259,7 @@ class VIEW3D_PT_BlenderUmapMain(BlenderUmapPanel):
         col.prop(context.scene, "reuse_maps", text="Reuse Maps")
         col.prop(context.scene, "reuse_mesh", text="Reuse Meshes")
         col.prop(context.scene, "use_cube_as_fallback")
+        col.prop(context.scene, "use_generic_shader")
 
         export_path_exists = os.path.exists(bpy.context.scene.exportPath)
         game_path_exists = os.path.exists(context.scene.Game_Path)
@@ -706,12 +711,14 @@ def create_node_groups():
 
         # I/O
         g_in = uvm.nodes.new("NodeGroupInput")
+        uvm.inputs.new("NodeSocketColor", "Color")
         uvm.inputs.new("NodeSocketShader", "Shader")
         uvm.inputs.new("NodeSocketShader", "Shader")
         uvm.inputs.new("NodeSocketShader", "Shader")
         uvm.inputs.new("NodeSocketShader", "Shader")
 
         g_out = uvm.nodes.new("NodeGroupOutput")
+        uvm.outputs.new("NodeSocketShader", "Shader")
         g_in.location = [-1700, 220]
         g_out.location = [300, 300]
         uvm.links.new(g_in.outputs[0], sep.inputs[0])
@@ -903,6 +910,13 @@ def register():
     bpy.types.Scene.use_cube_as_fallback = BoolProperty(
         name="Use Cube as Fallback Mesh",
         description="Use cube if mesh is not found",
+        default=True,
+        subtype="NONE",
+    )
+
+    bpy.types.Scene.use_generic_shader = BoolProperty(
+        name="Use Generic Shader",
+        description="Use generic shader",
         default=True,
         subtype="NONE",
     )
